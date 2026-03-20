@@ -2,17 +2,20 @@ import React, { useState } from 'react'
 import { Search, Loader } from 'lucide-react'
 import SearchFilters from '../components/SearchFilters'
 import ResultsList from '../components/ResultsList'
+import SummaryPanel from '../components/SummaryPanel'
 import useSearch from '../hooks/useSearch'
 
 export default function SearchPage() {
   const [query, setQuery] = useState('')
   const [filters, setFilters] = useState({ sources: ['pubmed', 'clinical_trials'], maxResults: 10 })
-  const { results, loading, error, search } = useSearch()
+  const { results, summary, loading, error, search } = useSearch()
 
   const handleSearch = (e) => {
     e.preventDefault()
     if (query.trim()) search(query, filters)
   }
+
+  const hasResults = Object.keys(results).length > 0
 
   return (
     <div className="container-max py-8">
@@ -40,22 +43,41 @@ export default function SearchPage() {
             </div>
           </form>
 
-          {error && <div className="card p-4 bg-red-50 border-red-200 text-red-800 mb-6">{error}</div>}
+          {error && (
+            <div className="card p-4 bg-red-50 border-red-200 text-red-800 mb-6">{error}</div>
+          )}
 
           {loading && (
             <div className="space-y-4">
+              {/* Summary skeleton */}
+              <div className="card p-5 animate-pulse">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-neutral-200 shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-neutral-200 rounded w-1/4" />
+                    <div className="h-4 bg-neutral-200 rounded w-full" />
+                    <div className="h-4 bg-neutral-200 rounded w-3/4" />
+                  </div>
+                </div>
+              </div>
+              {/* Results skeleton */}
               {[...Array(3)].map((_, i) => (
                 <div key={i} className="card p-6 animate-pulse">
-                  <div className="h-6 bg-neutral-200 rounded w-3/4 mb-2"></div>
-                  <div className="h-4 bg-neutral-200 rounded w-full"></div>
+                  <div className="h-6 bg-neutral-200 rounded w-3/4 mb-2" />
+                  <div className="h-4 bg-neutral-200 rounded w-full" />
                 </div>
               ))}
             </div>
           )}
 
-          {!loading && Object.keys(results).length > 0 && <ResultsList results={results} />}
+          {!loading && hasResults && (
+            <>
+              <SummaryPanel summary={summary} />
+              <ResultsList results={results} />
+            </>
+          )}
 
-          {!loading && query && Object.keys(results).length === 0 && !error && (
+          {!loading && query && !hasResults && !error && (
             <div className="card p-12 text-center">
               <h3 className="font-semibold text-neutral-900">No results found</h3>
               <p className="text-neutral-600 text-sm mt-1">Try adjusting your search query</p>
