@@ -1,104 +1,208 @@
-const PUBMED_URL = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils'
-const TRIALS_URL = 'https://clinicaltrials.gov/api/v2'
+// netlify/functions/search.js
+import Anthropic from "@anthropic-ai/sdk";
 
-async function searchPubMed(query, maxResults) {
-  try {
-    const searchParams = new URLSearchParams({ db: 'pubmed', term: query, retmax: maxResults, sort: 'date', retmode: 'json' })
-    const searchRes = await fetch(`${PUBMED_URL}/esearch.fcgi?${searchParams}`)
-    if (!searchRes.ok) throw new Error(`PubMed search failed: ${searchRes.status}`)
-    const searchData = await searchRes.json()
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-    const pmids = searchData?.esearchresult?.idlist || []
-    if (!pmids.length) return []
+// ── Step 1: Ask Claude to parse the natural-language question ──────────────
+async function parseQueryWithAI(naturalLanguageQuestion) {
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 512,
+    messages: [
+      {
+        role: "user",
+        content: `You are a biomedical search expert. Convert the following natural language medical question into optimized search terms for two databases. Return ONLY valid JSON, no markdown, no explanation.
 
-    const summaryParams = new URLSearchParams({ db: 'pubmed', id: pmids.join(','), retmode: 'json' })
-    const summaryRes = await fetch(`${PUBMED_URL}/esummary.fcgi?${summaryParams}`)
-    if (!summaryRes.ok) throw new Error(`PubMed summary failed: ${summaryRes.status}`)
-    const summaryData = await summaryRes.json()
+Question: "${naturalLanguageQuestion}"
 
-    return Object.values(summaryData?.result || {})
-      .filter(a => a.uid)
-      .map(a => ({
-        id: a.uid,
-        title: a.title || 'Untitled',
-        abstract: a.ab || '',
-        authors: (a.authors || []).map(au => ({ firstName: au.firstname || '', lastName: au.lastname || '' })),
-        publicationDate: a.pubdate,
-        journal: a.source || '',
-        pmid: a.uid,
-        source: 'pubmed',
-        url: `https://pubmed.ncbi.nlm.nih.gov/${a.uid}/`
-      }))
-  } catch (e) {
-    console.error('PubMed error:', e.message)
-    return []
-  }
+Return this exact structure:
+{
+  "intent": "one sentence describing what the user is asking",
+  "pubmed": {
+    "query": "MeSH and keyword query optimized for PubMed Entrez API",
+    "filters": ["Review", "Clinical Trial"]
+  },
+  "clinicalTrials": {
+    "condition": "primary condition or disease",
+    "intervention": "drug, device, or procedure",
+    "keywords": ["keyword1", "keyword2"]
+  },
+  "concepts": ["key concept 1", "key concept 2", "key concept 3"]
+}`,
+      },
+    ],
+  });
+
+  const text = response.content.find((b) => b.type === "text")?.text ?? "";
+  return JSON.parse(text);
 }
 
-async function searchClinicalTrials(query, maxResults) {
-  try {
-    const params = new URLSearchParams({ query, pageSize: maxResults, sortField: 'StartDate', sortOrder: 'desc' })
-    const response = await fetch(`${TRIALS_URL}/studies?${params}`)
-    if (!response.ok) throw new Error(`Clinical Trials failed: ${response.status}`)
-    const data = await response.json()
+// ── Step 2: Search PubMed ──────────────────────────────────────────────────
+async function searchPubMed(parsedQuery) {
+  const term = encodeURIComponent(parsedQuery.pubmed.query);
+  const baseUrl = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils";
+  const apiKey = process.env.PUBMED_API_KEY
+    ? `&api_key=${process.env.PUBMED_API_KEY}`
+    : "";
 
-    return (data?.studies || []).map(study => {
-      const proto = study?.protocolSection || {}
-      const ident = proto?.identificationModule || {}
-      const status = proto?.statusModule || {}
-      const design = proto?.designModule || {}
+  const searchUrl = `${baseUrl}/esearch.fcgi?db=pubmed&term=${term}&retmax=10&retmode=json&usehistory=y${apiKey}`;
+  const searchRes = await fetch(searchUrl);
+  const searchData = await searchRes.json();
+  const ids = searchData.esearchresult?.idlist ?? [];
 
-      return {
-        id: study.nctId || '',
-        title: ident?.officialTitle || ident?.briefTitle || 'Untitled',
-        abstract: ident?.briefSummary || '',
-        publicationDate: status?.startDateStruct?.year,
-        journal: 'ClinicalTrials.gov',
-        trialStatus: status?.overallStatus || '',
-        clinicalTrialPhase: design?.phases?.[0] || 'N/A',
-        source: 'clinical_trials',
-        url: `https://clinicaltrials.gov/ct2/show/${study.nctId}`
-      }
-    })
-  } catch (e) {
-    console.error('Clinical Trials error:', e.message)
-    return []
-  }
+  if (ids.length === 0) return [];
+
+  const summaryUrl = `${baseUrl}/esummary.fcgi?db=pubmed&id=${ids.join(",")}&retmode=json${apiKey}`;
+  const summaryRes = await fetch(summaryUrl);
+  const summaryData = await summaryRes.json();
+
+  return ids.map((id) => {
+    const doc = summaryData.result?.[id] ?? {};
+    return {
+      id,
+      title: doc.title ?? "No title",
+      authors: (doc.authors ?? []).map((a) => a.name).slice(0, 3),
+      journal: doc.fulljournalname ?? doc.source ?? "",
+      pubDate: doc.pubdate ?? "",
+      url: `https://pubmed.ncbi.nlm.nih.gov/${id}/`,
+      source: "PubMed",
+    };
+  });
 }
 
+// ── Step 3: Search ClinicalTrials.gov (v2 API) ────────────────────────────
+async function searchClinicalTrials(parsedQuery) {
+  const { condition, intervention, keywords } = parsedQuery.clinicalTrials;
+
+  const params = new URLSearchParams({
+    format: "json",
+    pageSize: "10",
+    fields:
+      "NCTId,BriefTitle,OverallStatus,Condition,InterventionName,BriefSummary,StartDate",
+  });
+
+  const queryParts = [];
+  if (condition) queryParts.push(condition);
+  if (intervention) queryParts.push(intervention);
+  if (keywords?.length) queryParts.push(...keywords.slice(0, 2));
+  params.set("query.term", queryParts.join(" "));
+
+  const url = `https://clinicaltrials.gov/api/v2/studies?${params}`;
+  const res = await fetch(url);
+  const data = await res.json();
+
+  return (data.studies ?? []).map((s) => {
+    const p = s.protocolSection ?? {};
+    const id = p.identificationModule?.nctId ?? "";
+    return {
+      id,
+      title: p.identificationModule?.briefTitle ?? "No title",
+      status: p.statusModule?.overallStatus ?? "",
+      conditions: p.conditionsModule?.conditions ?? [],
+      interventions: (p.armsInterventionsModule?.interventions ?? [])
+        .map((i) => i.name)
+        .slice(0, 3),
+      summary: (p.descriptionModule?.briefSummary ?? "").slice(0, 300),
+      startDate: p.statusModule?.startDateStruct?.date ?? "",
+      url: `https://clinicaltrials.gov/study/${id}`,
+      source: "ClinicalTrials.gov",
+    };
+  });
+}
+
+// ── Step 4: AI synthesis of results ───────────────────────────────────────
+async function synthesizeResults(question, parsedQuery, pubmedResults, trialResults) {
+  const context = [
+    `PubMed returned ${pubmedResults.length} articles. Top titles:`,
+    ...pubmedResults.slice(0, 5).map((r) => `- ${r.title}`),
+    `\nClinicalTrials.gov returned ${trialResults.length} studies. Top titles:`,
+    ...trialResults.slice(0, 5).map((r) => `- ${r.title} (${r.status})`),
+  ].join("\n");
+
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 600,
+    messages: [
+      {
+        role: "user",
+        content: `Based on this medical literature search, provide a brief evidence summary answering the user's question. Be factual, cite nothing beyond what's listed, and note if evidence is limited.
+
+User question: "${question}"
+Search intent: "${parsedQuery.intent}"
+
+Search results context:
+${context}
+
+Write 2-3 sentences summarizing what the evidence suggests. End with a note that users should consult a healthcare professional.`,
+      },
+    ],
+  });
+
+  return response.content.find((b) => b.type === "text")?.text ?? "";
+}
+
+// ── Main handler ───────────────────────────────────────────────────────────
 export const handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers: { 'Access-Control-Allow-Origin': '*' } }
-  }
+  const headers = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Content-Type": "application/json",
+  };
 
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: JSON.stringify({ error: 'Use POST' }) }
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 200, headers, body: "" };
   }
 
   try {
-    const { query, sources = ['pubmed', 'clinical_trials'], maxResults = 10 } = JSON.parse(event.body || '{}')
+    const { question } = JSON.parse(event.body ?? "{}");
 
-    if (!query?.trim()) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'Query required' }) }
+    if (!question?.trim()) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: "Question is required" }),
+      };
     }
 
-    const results = {}
-    if (sources.includes('pubmed')) {
-      results.pubmed = await searchPubMed(query, maxResults)
-    }
-    if (sources.includes('clinical_trials')) {
-      results.clinical_trials = await searchClinicalTrials(query, maxResults)
-    }
+    // 1. Parse question with AI
+    const parsedQuery = await parseQueryWithAI(question);
+
+    // 2. Fan out to data sources in parallel
+    const [pubmedResults, trialResults] = await Promise.allSettled([
+      searchPubMed(parsedQuery),
+      searchClinicalTrials(parsedQuery),
+    ]);
+
+    const pubmed = pubmedResults.status === "fulfilled" ? pubmedResults.value : [];
+    const trials = trialResults.status === "fulfilled" ? trialResults.value : [];
+
+    // 3. AI synthesis
+    const summary = await synthesizeResults(question, parsedQuery, pubmed, trials);
 
     return {
       statusCode: 200,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      body: JSON.stringify({ success: true, query, results, timestamp: new Date().toISOString() })
-    }
-  } catch (error) {
+      headers,
+      body: JSON.stringify({
+        question,
+        intent: parsedQuery.intent,
+        concepts: parsedQuery.concepts,
+        summary,
+        results: {
+          pubmed,
+          clinicalTrials: trials,
+        },
+        searchTerms: {
+          pubmedQuery: parsedQuery.pubmed.query,
+          clinicalTrialsQuery: parsedQuery.clinicalTrials,
+        },
+      }),
+    };
+  } catch (err) {
+    console.error("Search error:", err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ success: false, error: error.message })
-    }
+      headers,
+      body: JSON.stringify({ error: "Search failed", detail: err.message }),
+    };
   }
-}
+};
