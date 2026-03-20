@@ -12,9 +12,7 @@ export default function useSearch() {
 
     try {
       const response = await axios.post('/api/search', {
-        query,
-        sources: filters.sources,
-        maxResults: filters.maxResults
+        question: query,
       })
       setResults(response.data.results || {})
     } catch (err) {
