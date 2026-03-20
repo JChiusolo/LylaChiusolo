@@ -6,16 +6,24 @@ export default function ResultCard({ article, source }) {
 
   const isPubMed = source === 'pubmed'
   const badgeColor = isPubMed ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
-  const authorDisplay = article.authors?.slice(0, 2).join(', ')
+  const badgeClass = 'badge ' + badgeColor
+  const authorDisplay = article.authors ? article.authors.slice(0, 2).join(', ') : ''
   const dateDisplay = article.pubDate || article.startDate || null
   const bodyText = article.summary || null
+  const idLabel = isPubMed ? 'PMID: ' + article.id : 'NCT: ' + article.id
+  const statusClass = article.status === 'RECRUITING'
+    ? 'text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700'
+    : article.status === 'COMPLETED'
+    ? 'text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-700'
+    : 'text-xs font-medium px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700'
+  const chevronClass = expanded ? 'w-4 h-4 rotate-180' : 'w-4 h-4'
 
   return (
     <div className="card hover:shadow-md">
       <div className="p-5">
         <div className="flex justify-between items-start gap-3 mb-3">
           <h3 className="text-lg font-semibold text-neutral-900">{article.title}</h3>
-          <span className={`badge ${badgeColor}`}>{isPubMed ? 'PubMed' : 'Trial'}</span>
+          <span className={badgeClass}>{isPubMed ? 'PubMed' : 'Trial'}</span>
         </div>
 
         {bodyText && (
@@ -31,9 +39,7 @@ export default function ResultCard({ article, source }) {
           )}
           {!isPubMed && article.status && (
             <div className="flex items-center gap-2">
-              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${article.status === 'RECRUITING' ? 'bg-green-100 text-green-700' : article.status === 'COMPLETED' ? 'bg-gray-100 text-gray-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                {article.status}
-              </span>
+              <span className={statusClass}>{article.status}</span>
             </div>
           )}
           {dateDisplay && (
@@ -50,7 +56,7 @@ export default function ResultCard({ article, source }) {
             className="text-primary-600 text-sm font-medium flex items-center gap-1"
           >
             {expanded ? 'Less' : 'More'}
-            <ChevronDown className={`w-4 h-4 ${expanded ? 'rotate-180' : ''}`} />
+            <ChevronDown className={chevronClass} />
           </button>
         )}
       </div>
@@ -62,9 +68,7 @@ export default function ResultCard({ article, source }) {
       )}
 
       <div className="border-t border-neutral-200 px-5 py-3 bg-neutral-50 flex justify-between items-center">
-        <span className="text-xs text-neutral-500">
-          {isPubMed ? 'PMID: ' : 'NCT: '}{article.id}
-        </span>
+        <span className="text-xs text-neutral-500">{idLabel}</span>
         
           href={article.url}
           target="_blank"
