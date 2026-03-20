@@ -5,8 +5,7 @@ function CitationBadge({ index, type }) {
   const isPubMed = type === 'PubMed'
   return (
     <span
-      className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full
-        ${isPubMed ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}
+      className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full ${isPubMed ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}
     >
       {isPubMed ? <FlaskConical className="w-3 h-3" /> : <FileText className="w-3 h-3" />}
       [{index}] {type}
@@ -56,13 +55,12 @@ export default function SummaryPanel({ summary }) {
 
   const { conclusion, supportingSourceCount, citations = [], disclaimer } = summary
 
-  const pubmedCitations = citations.filter(c => c.type === 'PubMed')
-  const trialCitations = citations.filter(c => c.type === 'ClinicalTrial')
+  const pubmedCitations = citations.filter((c) => c.type === 'PubMed')
+  const trialCitations = citations.filter((c) => c.type === 'ClinicalTrial')
 
   return (
     <div className="mb-8 space-y-4">
 
-      {/* Conclusion banner */}
       <div className="card p-5 bg-primary-50 border border-primary-200">
         <div className="flex items-start gap-3">
           <div className="shrink-0 w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center mt-0.5">
@@ -82,11 +80,10 @@ export default function SummaryPanel({ summary }) {
         </div>
       </div>
 
-      {/* Citations toggle */}
       {citations.length > 0 && (
         <div>
           <button
-            onClick={() => setCitationsOpen(o => !o)}
+            onClick={() => setCitationsOpen((o) => !o)}
             className="w-full card p-4 text-left hover:shadow-md transition-shadow"
           >
             <div className="flex items-center justify-between">
@@ -124,13 +121,13 @@ export default function SummaryPanel({ summary }) {
         </div>
       )}
 
-      {/* Disclaimer */}
       {disclaimer && (
         <div className="flex items-start gap-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg">
           <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
           <p className="text-xs text-amber-800">{disclaimer}</p>
         </div>
       )}
+
     </div>
   )
 }
