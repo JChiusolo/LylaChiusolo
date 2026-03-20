@@ -11,7 +11,7 @@ async function parseQueryWithAI(naturalLanguageQuestion) {
     messages: [
       {
         role: "user",
-        content: `You are a biomedical search expert. Convert the following natural language medical question into optimized search terms for two databases. Return ONLY valid JSON, no markdown, no explanation.
+        content: `You are a biomedical search expert. Convert the following natural language medical question into concise search terms. Keep queries SHORT — max 8 words per query. Return ONLY valid JSON, no markdown, no explanation.
 
 Question: "${naturalLanguageQuestion}"
 
@@ -19,15 +19,15 @@ Return this exact structure:
 {
   "intent": "one sentence describing what the user is asking",
   "pubmed": {
-    "query": "MeSH and keyword query optimized for PubMed Entrez API",
+    "query": "short PubMed query max 8 words using key MeSH terms only",
     "filters": ["Review", "Clinical Trial"]
   },
   "clinicalTrials": {
-    "condition": "primary condition or disease",
-    "intervention": "drug, device, or procedure",
+    "condition": "primary condition only, 1-3 words",
+    "intervention": "intervention only, 1-3 words",
     "keywords": ["keyword1", "keyword2"]
   },
-  "concepts": ["key concept 1", "key concept 2", "key concept 3"]
+  "concepts": ["concept 1", "concept 2", "concept 3"]
 }`,
       },
     ],
@@ -77,8 +77,7 @@ async function searchClinicalTrials(parsedQuery, maxResults) {
   const params = new URLSearchParams({
     format: "json",
     pageSize: String(maxResults),
-    fields:
-      "NCTId,BriefTitle,OverallStatus,Condition,InterventionName,BriefSummary,StartDate",
+    fields: "NCTId,BriefTitle,OverallStatus,Condition,InterventionName,BriefSummary,StartDate",
   });
 
   const queryParts = [];
@@ -121,11 +120,11 @@ async function synthesizeResults(question, parsedQuery, pubmedResults, trialResu
 
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-20250514",
-    max_tokens: 600,
+    max_tokens: 400,
     messages: [
       {
         role: "user",
-        content: `Based on this medical literature search, provide a brief evidence summary answering the user's question. Be factual, cite nothing beyond what's listed, and note if evidence is limited.
+        content: `Based on this medical literature search, provide a brief evidence summary answering the user's question. Be factual and concise.
 
 User question: "${question}"
 Search intent: "${parsedQuery.intent}"
@@ -133,7 +132,7 @@ Search intent: "${parsedQuery.intent}"
 Search results context:
 ${context}
 
-Write 2-3 sentences summarizing what the evidence suggests. End with a note that users should consult a healthcare professional.`,
+Write 2-3 sentences summarizing what the evidence suggests. End with: "Please consult a healthcare professional before making any medical decisions."`,
       },
     ],
   });
@@ -176,7 +175,7 @@ export const handler = async (event) => {
     const pubmed = pubmedResults.status === "fulfilled" ? pubmedResults.value : [];
     const trials = trialResults.status === "fulfilled" ? trialResults.value : [];
 
-    // 3. AI synthesis
+    // 3. AI synthesis runs after both sources return
     const summary = await synthesizeResults(question, parsedQuery, pubmed, trials);
 
     return {
