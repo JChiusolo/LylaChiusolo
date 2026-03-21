@@ -8,7 +8,9 @@ export default function HomePage() {
       <section className="py-20 md:py-32 bg-gradient-to-b from-white to-neutral-50">
         <div className="container-max max-w-3xl mx-auto text-center">
           <h1 className="text-4xl md:text-6xl font-bold text-neutral-900 mb-6">
-           Medical Information Search Made <span className="bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">Simple</span>
+            Medical Information<br />
+            Search Made<br />
+            <span className="bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">Simple</span>
           </h1>
           <p className="text-xl text-neutral-600 mb-8">
             Search PubMed and Clinical Trials simultaneously. Find the research you need in seconds.
@@ -47,20 +49,4 @@ export default function HomePage() {
       <section className="py-16 md:py-24 bg-neutral-50">
         <div className="container-max text-center">
           <h2 className="text-3xl font-bold text-neutral-900 mb-8">Research Sources</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
-            <div className="card p-8">
-              <div className="text-5xl mb-4">🔬</div>
-              <h3 className="text-xl font-bold text-neutral-900 mb-2">PubMed</h3>
-              <p className="text-neutral-600 text-sm">NCBI biomedical literature database with millions of citations</p>
-            </div>
-            <div className="card p-8">
-              <div className="text-5xl mb-4">⚕️</div>
-              <h3 className="text-xl font-bold text-neutral-900 mb-2">Clinical Trials</h3>
-              <p className="text-neutral-600 text-sm">ClinicalTrials.gov with recruitment status and trial information</p>
-            </div>
-          </div>
-        </div>
-      </section>
-    </div>
-  )
-}
+          <div clas
