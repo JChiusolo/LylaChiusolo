@@ -46,7 +46,6 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
   const [googleAuth, setGoogleAuth] = useState(null)
 
   useEffect(() => {
-    // Load Google API
     window.gapi = window.gapi || {}
     
     const script = document.createElement('script')
@@ -56,7 +55,7 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
     script.onload = () => {
       window.gapi.load('auth2', () => {
         const auth = window.gapi.auth2.init({
-          client_id: '45893805451-gpspi2ei5frk4fcanur2pfboqkur52j3.apps.googleusercontent.com',
+          client_id: '45893805451-5jj3mimasahbc9v1baegis10e19db2ps.apps.googleusercontent.com',
           scope: 'https://www.googleapis.com/auth/presentations https://www.googleapis.com/auth/drive'
         })
         setGoogleAuth(auth)
@@ -226,3 +225,10 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
     </div>
   )
 }
+```
+
+**Then:**
+
+1. Update `.env.local` with the new Client ID:
+```
+   VITE_GOOGLE_CLIENT_ID=45893805451-5jj3mimasahbc9v1baegis10e19db2ps.apps.googleusercontent.com
