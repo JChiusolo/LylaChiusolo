@@ -46,11 +46,17 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
   const [accessToken, setAccessToken] = useState(null)
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('google_access_token')
-    if (storedToken) {
-      setAccessToken(storedToken)
-      setIsSignedIn(true)
+    const checkToken = () => {
+      const token = localStorage.getItem('google_access_token')
+      if (token) {
+        setAccessToken(token)
+        setIsSignedIn(true)
+      }
     }
+    
+    checkToken()
+    window.addEventListener('storage', checkToken)
+    return () => window.removeEventListener('storage', checkToken)
   }, [])
 
   if (!summary) return null
@@ -97,7 +103,8 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
       })
 
       if (!response.ok) {
-        throw new Error(`Failed to create presentation: ${response.statusText}`)
+        const errorData = await response.json()
+        throw new Error(errorData.message || `Failed to create presentation: ${response.statusText}`)
       }
 
       const data = await response.json()
