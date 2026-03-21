@@ -43,30 +43,39 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
   const [isSignedIn, setIsSignedIn] = useState(false)
-  const [googleAuth, setGoogleAuth] = useState(null)
+  const [accessToken, setAccessToken] = useState(null)
 
   useEffect(() => {
-    window.gapi = window.gapi || {}
-
     const script = document.createElement('script')
-    script.src = 'https://apis.google.com/js/platform.js'
+    script.src = 'https://accounts.google.com/gsi/client'
     script.async = true
     script.defer = true
     script.onload = () => {
-      window.gapi.load('auth2', () => {
-        const auth = window.gapi.auth2.init({
+      if (window.google && window.google.accounts) {
+        window.google.accounts.id.initialize({
           client_id: '45893805451-5jj3mimasahbc9v1baegis10e19db2ps.apps.googleusercontent.com',
-          scope: 'https://www.googleapis.com/auth/presentations https://www.googleapis.com/auth/drive',
+          callback: handleCredentialResponse,
         })
-        setGoogleAuth(auth)
-        setIsSignedIn(auth.isSignedIn.get())
-        auth.isSignedIn.listen((isSignedIn) => {
-          setIsSignedIn(isSignedIn)
-        })
-      })
+      }
     }
     document.head.appendChild(script)
   }, [])
+
+  const handleCredentialResponse = (response) => {
+    setAccessToken(response.credential)
+    setIsSignedIn(true)
+    setError(null)
+  }
+
+  const handleSignIn = () => {
+    if (window.google && window.google.accounts) {
+      window.google.accounts.id.renderButton(
+        document.getElementById('signInButton'),
+        { theme: 'outline', size: 'large' }
+      )
+      document.getElementById('signInButton').click()
+    }
+  }
 
   if (!summary) return null
 
@@ -75,17 +84,8 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
   const pubmedCount = safeCitations.filter((c) => c.type === 'PubMed').length
   const trialCount = safeCitations.filter((c) => c.type === 'ClinicalTrial').length
 
-  const handleSignIn = async () => {
-    try {
-      await googleAuth.signIn()
-    } catch (err) {
-      setError('Failed to sign in')
-      console.error('Sign in error:', err)
-    }
-  }
-
   const handleExportToSlides = async () => {
-    if (!isSignedIn) {
+    if (!isSignedIn || !accessToken) {
       setError('Please sign in to your Google account first')
       return
     }
@@ -94,9 +94,6 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
     setError(null)
 
     try {
-      const user = googleAuth.currentUser.get()
-      const accessToken = user.getAuthResponse().id_token
-
       const response = await fetch('/.netlify/functions/create-slides', {
         method: 'POST',
         headers: {
@@ -153,14 +150,17 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
 
       <div className="flex gap-2 flex-wrap">
         {!isSignedIn ? (
-          <button
-            onClick={handleSignIn}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
-            title="Sign in with Google to export to slides"
-          >
-            <Download className="w-4 h-4" />
-            Sign in with Google
-          </button>
+          <div>
+            <div id="signInButton" style={{ display: 'none' }}></div>
+            <button
+              onClick={handleSignIn}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+              title="Sign in with Google to export to slides"
+            >
+              <Download className="w-4 h-4" />
+              Sign in with Google
+            </button>
+          </div>
         ) : (
           <button
             onClick={handleExportToSlides}
