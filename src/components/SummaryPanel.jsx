@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { ChevronDown, ChevronUp, ExternalLink, FlaskConical, FileText, ShieldAlert } from 'lucide-react'
+import { ChevronDown, ChevronUp, ExternalLink, FlaskConical, FileText, ShieldAlert, Download } from 'lucide-react'
 
 function CitationBadge({ index, type }) {
   const isPubMed = type === 'PubMed'
@@ -38,8 +38,10 @@ function CitationCard({ citation }) {
   )
 }
 
-export default function SummaryPanel({ summary }) {
+export default function SummaryPanel({ summary, topic = 'Research' }) {
   const [citationsOpen, setCitationsOpen] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState(null)
 
   if (!summary) return null
 
@@ -47,6 +49,43 @@ export default function SummaryPanel({ summary }) {
   const safeCitations = citations || []
   const pubmedCount = safeCitations.filter((c) => c.type === 'PubMed').length
   const trialCount = safeCitations.filter((c) => c.type === 'ClinicalTrial').length
+
+  const handleExportToSlides = async () => {
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const response = await fetch('/.netlify/functions/create-slides', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: `${topic || 'Research'} Summary`,
+          summary: conclusion,
+          citations: safeCitations,
+          disclaimer: disclaimer,
+          supportingSourceCount: supportingSourceCount,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to create presentation: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+
+      if (data.presentationUrl) {
+        window.open(data.presentationUrl, '_blank')
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred'
+      setError(errorMessage)
+      console.error('Error creating Google Slides:', errorMessage)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   return (
     <div className="mb-8 space-y-4">
@@ -68,6 +107,23 @@ export default function SummaryPanel({ summary }) {
             <p className="text-neutral-800 leading-relaxed">{conclusion}</p>
           </div>
         </div>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          onClick={handleExportToSlides}
+          disabled={isLoading}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold rounded-lg transition-colors disabled:cursor-not-allowed"
+          title="Export summary and citations to Google Slides"
+        >
+          <Download className="w-4 h-4" />
+          {isLoading ? 'Creating presentation...' : 'Export to Google Slides'}
+        </button>
+        {error && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">
+            <span>Export failed: {error}</span>
+          </div>
+        )}
       </div>
 
       {safeCitations.length > 0 && (
