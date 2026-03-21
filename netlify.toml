@@ -11,6 +11,7 @@
 [functions]
   "*" = { node_bundler = "esbuild" }
   "search" = { timeout = 26 }
+  "create-slides" = { timeout = 30 }
 
 [[redirects]]
   from = "/api/*"
