@@ -53,7 +53,7 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
         setIsSignedIn(true)
       }
     }
-    
+
     checkToken()
     window.addEventListener('storage', checkToken)
     return () => window.removeEventListener('storage', checkToken)
@@ -70,9 +70,9 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
     const clientId = '45893805451-5jj3mimasahbc9v1baegis10e19db2ps.apps.googleusercontent.com'
     const redirectUri = `${window.location.origin}/auth/callback`
     const scope = encodeURIComponent('https://www.googleapis.com/auth/presentations https://www.googleapis.com/auth/drive')
-    const responseType = 'token'
+    const responseType = 'code'
 
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=${responseType}&scope=${scope}`
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=${responseType}&scope=${scope}&access_type=offline`
 
     window.location.href = authUrl
   }
