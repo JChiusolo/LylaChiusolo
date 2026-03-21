@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { ChevronDown, ChevronUp, ExternalLink, FlaskConical, FileText, ShieldAlert, Download } from 'lucide-react'
 
 function CitationBadge({ index, type }) {
@@ -42,6 +42,32 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
   const [citationsOpen, setCitationsOpen] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [isSignedIn, setIsSignedIn] = useState(false)
+  const [googleAuth, setGoogleAuth] = useState(null)
+
+  useEffect(() => {
+    // Load Google API
+    window.gapi = window.gapi || {}
+    
+    const script = document.createElement('script')
+    script.src = 'https://apis.google.com/js/platform.js'
+    script.async = true
+    script.defer = true
+    script.onload = () => {
+      window.gapi.load('auth2', () => {
+        const auth = window.gapi.auth2.init({
+          client_id: '45893805451-gpspi2ei5frk4fcanur2pfboqkur52j3.apps.googleusercontent.com',
+          scope: 'https://www.googleapis.com/auth/presentations https://www.googleapis.com/auth/drive'
+        })
+        setGoogleAuth(auth)
+        setIsSignedIn(auth.isSignedIn.get())
+        auth.isSignedIn.listen((isSignedIn) => {
+          setIsSignedIn(isSignedIn)
+        })
+      })
+    }
+    document.head.appendChild(script)
+  }, [])
 
   if (!summary) return null
 
@@ -50,11 +76,28 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
   const pubmedCount = safeCitations.filter((c) => c.type === 'PubMed').length
   const trialCount = safeCitations.filter((c) => c.type === 'ClinicalTrial').length
 
+  const handleSignIn = async () => {
+    try {
+      await googleAuth.signIn()
+    } catch (err) {
+      setError('Failed to sign in')
+      console.error('Sign in error:', err)
+    }
+  }
+
   const handleExportToSlides = async () => {
+    if (!isSignedIn) {
+      setError('Please sign in to your Google account first')
+      return
+    }
+
     setIsLoading(true)
     setError(null)
 
     try {
+      const user = googleAuth.currentUser.get()
+      const accessToken = user.getAuthResponse().id_token
+
       const response = await fetch('/.netlify/functions/create-slides', {
         method: 'POST',
         headers: {
@@ -66,6 +109,7 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
           citations: safeCitations,
           disclaimer: disclaimer,
           supportingSourceCount: supportingSourceCount,
+          accessToken: accessToken,
         }),
       })
 
@@ -109,19 +153,30 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
         </div>
       </div>
 
-      <div className="flex gap-2">
-        <button
-          onClick={handleExportToSlides}
-          disabled={isLoading}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold rounded-lg transition-colors disabled:cursor-not-allowed"
-          title="Export summary and citations to Google Slides"
-        >
-          <Download className="w-4 h-4" />
-          {isLoading ? 'Creating presentation...' : 'Export to Google Slides'}
-        </button>
+      <div className="flex gap-2 flex-wrap">
+        {!isSignedIn ? (
+          <button
+            onClick={handleSignIn}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+            title="Sign in with Google to export to slides"
+          >
+            <Download className="w-4 h-4" />
+            Sign in with Google
+          </button>
+        ) : (
+          <button
+            onClick={handleExportToSlides}
+            disabled={isLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold rounded-lg transition-colors disabled:cursor-not-allowed"
+            title="Export summary and citations to Google Slides"
+          >
+            <Download className="w-4 h-4" />
+            {isLoading ? 'Creating presentation...' : 'Export to Google Slides'}
+          </button>
+        )}
         {error && (
           <div className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-700 text-sm rounded-lg border border-red-200">
-            <span>Export failed: {error}</span>
+            <span>{error}</span>
           </div>
         )}
       </div>
