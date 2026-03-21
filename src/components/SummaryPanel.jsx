@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { ChevronDown, ChevronUp, ExternalLink, FlaskConical, FileText, ShieldAlert, Download } from 'lucide-react'
 
 function CitationBadge({ index, type }) {
@@ -45,6 +45,25 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
   const [isSignedIn, setIsSignedIn] = useState(false)
   const [accessToken, setAccessToken] = useState(null)
 
+  useEffect(() => {
+    const handleOAuthCallback = () => {
+      const hash = window.location.hash
+      if (hash) {
+        const params = new URLSearchParams(hash.substring(1))
+        const token = params.get('access_token')
+        
+        if (token) {
+          setAccessToken(token)
+          setIsSignedIn(true)
+          setError(null)
+          window.history.replaceState({}, document.title, window.location.pathname)
+        }
+      }
+    }
+
+    handleOAuthCallback()
+  }, [])
+
   if (!summary) return null
 
   const { conclusion, supportingSourceCount, citations, disclaimer } = summary
@@ -52,44 +71,15 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
   const pubmedCount = safeCitations.filter((c) => c.type === 'PubMed').length
   const trialCount = safeCitations.filter((c) => c.type === 'ClinicalTrial').length
 
-  const handleSignIn = async () => {
+  const handleSignIn = () => {
     const clientId = '45893805451-5jj3mimasahbc9v1baegis10e19db2ps.apps.googleusercontent.com'
-    const redirectUri = window.location.origin
-    const scope = 'https://www.googleapis.com/auth/presentations https://www.googleapis.com/auth/drive'
+    const redirectUri = `${window.location.origin}/auth/callback`
+    const scope = encodeURIComponent('https://www.googleapis.com/auth/presentations https://www.googleapis.com/auth/drive')
+    const responseType = 'token'
     
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent(scope)}`
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=${responseType}&scope=${scope}`
     
-    const width = 500
-    const height = 600
-    const left = window.screenX + (window.outerWidth - width) / 2
-    const top = window.screenY + (window.outerHeight - height) / 2
-    
-    const popup = window.open(authUrl, 'google-login', `width=${width},height=${height},left=${left},top=${top}`)
-    
-    const checkPopup = setInterval(() => {
-      try {
-        if (popup.closed) {
-          clearInterval(checkPopup)
-          return
-        }
-        
-        if (popup.location.hash) {
-          const hash = popup.location.hash.substring(1)
-          const params = new URLSearchParams(hash)
-          const token = params.get('access_token')
-          
-          if (token) {
-            setAccessToken(token)
-            setIsSignedIn(true)
-            setError(null)
-            popup.close()
-            clearInterval(checkPopup)
-          }
-        }
-      } catch (e) {
-        // Ignore cross-origin errors
-      }
-    }, 500)
+    window.location.href = authUrl
   }
 
   const handleExportToSlides = async () => {
