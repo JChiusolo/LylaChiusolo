@@ -12,8 +12,14 @@ export default function AuthCallback() {
       
       if (accessToken) {
         localStorage.setItem('google_access_token', accessToken)
-        navigate('/')
+        setTimeout(() => {
+          navigate('/search')
+        }, 100)
+      } else {
+        navigate('/search')
       }
+    } else {
+      navigate('/search')
     }
   }, [navigate])
 
