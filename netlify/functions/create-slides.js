@@ -228,4 +228,4 @@ exports.handler = async (event, context) => {
 
 **File Path:** `.env.local`
 ```
-VITE_GOOGLE_CLIENT_ID=45893805451-gpspi2ei5frk4fcanur2pfboqkur52j3.apps.googleusercontent.com
+VITE_GOOGLE_CLIENT_ID=45893805451-5jj3mimasahbc9v1baegis10e19db2ps.apps.googleusercontent.com
