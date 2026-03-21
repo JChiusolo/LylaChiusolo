@@ -1,6 +1,17 @@
 const { google } = require('googleapis')
 
 exports.handler = async (event, context) => {
+  if (event.httpMethod === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      },
+    }
+  }
+
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
@@ -18,10 +29,7 @@ exports.handler = async (event, context) => {
       }
     }
 
-    const auth = new google.auth.OAuth2(
-      '45893805451-gpspi2ei5frk4fcanur2pfboqkur52j3.apps.googleusercontent.com'
-    )
-
+    const auth = new google.auth.OAuth2()
     auth.setCredentials({
       access_token: accessToken,
     })
@@ -203,6 +211,10 @@ exports.handler = async (event, context) => {
 
     return {
       statusCode: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({
         presentationId,
         presentationUrl,
@@ -213,6 +225,10 @@ exports.handler = async (event, context) => {
     console.error('Error creating Google Slides presentation:', error)
     return {
       statusCode: 500,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({
         error: 'Failed to create presentation',
         message: error.message || 'Unknown error',
@@ -220,12 +236,3 @@ exports.handler = async (event, context) => {
     }
   }
 }
-```
-
----
-
-## **STEP 3: Update .env.local (Local Development)**
-
-**File Path:** `.env.local`
-```
-VITE_GOOGLE_CLIENT_ID=45893805451-5jj3mimasahbc9v1baegis10e19db2ps.apps.googleusercontent.com
