@@ -1,27 +1,43 @@
 import React, { useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 export default function AuthCallback() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
   useEffect(() => {
-    const hash = window.location.hash
-    if (hash) {
-      const params = new URLSearchParams(hash.substring(1))
-      const accessToken = params.get('access_token')
-      
-      if (accessToken) {
-        localStorage.setItem('google_access_token', accessToken)
-        setTimeout(() => {
-          navigate('/search')
-        }, 100)
-      } else {
-        navigate('/search')
-      }
+    const code = searchParams.get('code')
+    
+    if (code) {
+      exchangeCodeForToken(code)
     } else {
       navigate('/search')
     }
-  }, [navigate])
+  }, [searchParams, navigate])
+
+  const exchangeCodeForToken = async (code) => {
+    try {
+      const response = await fetch('/.netlify/functions/exchange-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ code }),
+      })
+
+      const data = await response.json()
+      
+      if (data.access_token) {
+        localStorage.setItem('google_access_token', data.access_token)
+        navigate('/search')
+      } else {
+        navigate('/search')
+      }
+    } catch (error) {
+      console.error('Token exchange failed:', error)
+      navigate('/search')
+    }
+  }
 
   return (
     <div className="flex items-center justify-center min-h-screen">
