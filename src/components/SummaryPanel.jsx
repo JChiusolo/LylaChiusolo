@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { ChevronDown, ChevronUp, ExternalLink, FlaskConical, FileText, ShieldAlert, Download } from 'lucide-react'
 
 function CitationBadge({ index, type }) {
@@ -45,44 +45,52 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
   const [isSignedIn, setIsSignedIn] = useState(false)
   const [accessToken, setAccessToken] = useState(null)
 
-  useEffect(() => {
-    const script = document.createElement('script')
-    script.src = 'https://accounts.google.com/gsi/client'
-    script.async = true
-    script.defer = true
-    script.onload = () => {
-      if (window.google && window.google.accounts) {
-        window.google.accounts.id.initialize({
-          client_id: '45893805451-5jj3mimasahbc9v1baegis10e19db2ps.apps.googleusercontent.com',
-          callback: handleCredentialResponse,
-        })
-      }
-    }
-    document.head.appendChild(script)
-  }, [])
-
-  const handleCredentialResponse = (response) => {
-    setAccessToken(response.credential)
-    setIsSignedIn(true)
-    setError(null)
-  }
-
-  const handleSignIn = () => {
-    if (window.google && window.google.accounts) {
-      window.google.accounts.id.renderButton(
-        document.getElementById('signInButton'),
-        { theme: 'outline', size: 'large' }
-      )
-      document.getElementById('signInButton').click()
-    }
-  }
-
   if (!summary) return null
 
   const { conclusion, supportingSourceCount, citations, disclaimer } = summary
   const safeCitations = citations || []
   const pubmedCount = safeCitations.filter((c) => c.type === 'PubMed').length
   const trialCount = safeCitations.filter((c) => c.type === 'ClinicalTrial').length
+
+  const handleSignIn = async () => {
+    const clientId = '45893805451-5jj3mimasahbc9v1baegis10e19db2ps.apps.googleusercontent.com'
+    const redirectUri = window.location.origin
+    const scope = 'https://www.googleapis.com/auth/presentations https://www.googleapis.com/auth/drive'
+    
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent(scope)}`
+    
+    const width = 500
+    const height = 600
+    const left = window.screenX + (window.outerWidth - width) / 2
+    const top = window.screenY + (window.outerHeight - height) / 2
+    
+    const popup = window.open(authUrl, 'google-login', `width=${width},height=${height},left=${left},top=${top}`)
+    
+    const checkPopup = setInterval(() => {
+      try {
+        if (popup.closed) {
+          clearInterval(checkPopup)
+          return
+        }
+        
+        if (popup.location.hash) {
+          const hash = popup.location.hash.substring(1)
+          const params = new URLSearchParams(hash)
+          const token = params.get('access_token')
+          
+          if (token) {
+            setAccessToken(token)
+            setIsSignedIn(true)
+            setError(null)
+            popup.close()
+            clearInterval(checkPopup)
+          }
+        }
+      } catch (e) {
+        // Ignore cross-origin errors
+      }
+    }, 500)
+  }
 
   const handleExportToSlides = async () => {
     if (!isSignedIn || !accessToken) {
@@ -150,17 +158,14 @@ export default function SummaryPanel({ summary, topic = 'Research' }) {
 
       <div className="flex gap-2 flex-wrap">
         {!isSignedIn ? (
-          <div>
-            <div id="signInButton" style={{ display: 'none' }}></div>
-            <button
-              onClick={handleSignIn}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
-              title="Sign in with Google to export to slides"
-            >
-              <Download className="w-4 h-4" />
-              Sign in with Google
-            </button>
-          </div>
+          <button
+            onClick={handleSignIn}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+            title="Sign in with Google to export to slides"
+          >
+            <Download className="w-4 h-4" />
+            Sign in with Google
+          </button>
         ) : (
           <button
             onClick={handleExportToSlides}
