@@ -1,17 +1,6 @@
 const { google } = require('googleapis')
 
 exports.handler = async (event, context) => {
-  if (event.httpMethod === 'OPTIONS') {
-    return {
-      statusCode: 200,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      },
-    }
-  }
-
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
@@ -29,46 +18,39 @@ exports.handler = async (event, context) => {
       }
     }
 
-    const oauth2Client = new google.auth.OAuth2()
-    oauth2Client.setCredentials({
+    // Create OAuth2 client with just the access token
+    const auth = new google.auth.OAuth2()
+    auth.setCredentials({
       access_token: accessToken,
+      token_type: 'Bearer',
     })
 
-    const slides = google.slides({ version: 'v1', auth: oauth2Client })
+    const slides = google.slides({ version: 'v1', auth })
 
-    const createResponse = await slides.presentations.create({
+    // Create presentation
+    const presentation = await slides.presentations.create({
       requestBody: {
         title: title,
       },
     })
 
-    const presentationId = createResponse.data.presentationId
+    const presentationId = presentation.data.presentationId
+    const pageId = presentation.data.slides[0].objectId
 
-    const slidesResponse = await slides.presentations.get({
-      presentationId: presentationId,
-    })
-
-    const pageId = slidesResponse.data.slides?.[0]?.objectId || 'page1'
-
-    const requests = []
-
-    requests.push({
-      insertText: {
-        objectId: slidesResponse.data.slides?.[0]?.pageElements?.[0]?.objectId || 'title',
-        text: title,
-        insertionIndex: 0,
+    // Prepare requests for content
+    const requests = [
+      {
+        insertText: {
+          objectId: presentation.data.slides[0].pageElements[0].objectId,
+          text: title,
+          insertionIndex: 0,
+        },
       },
-    })
-
-    requests.push(
       {
         createTextBox: {
           elementProperties: {
             pageObjectId: pageId,
-            size: {
-              width: { magnitude: 9, unit: 'INCHES' },
-              height: { magnitude: 0.5, unit: 'INCHES' },
-            },
+            size: { width: { magnitude: 9, unit: 'INCHES' }, height: { magnitude: 0.5, unit: 'INCHES' } },
             transform: {
               scaleX: 1,
               scaleY: 1,
@@ -84,10 +66,7 @@ exports.handler = async (event, context) => {
         createTextBox: {
           elementProperties: {
             pageObjectId: pageId,
-            size: {
-              width: { magnitude: 9, unit: 'INCHES' },
-              height: { magnitude: 2.5, unit: 'INCHES' },
-            },
+            size: { width: { magnitude: 9, unit: 'INCHES' }, height: { magnitude: 2.5, unit: 'INCHES' } },
             transform: {
               scaleX: 1,
               scaleY: 1,
@@ -98,18 +77,15 @@ exports.handler = async (event, context) => {
           },
           text: summary,
         },
-      }
-    )
+      },
+    ]
 
     if (supportingSourceCount > 0) {
       requests.push({
         createTextBox: {
           elementProperties: {
             pageObjectId: pageId,
-            size: {
-              width: { magnitude: 9, unit: 'INCHES' },
-              height: { magnitude: 0.3, unit: 'INCHES' },
-            },
+            size: { width: { magnitude: 9, unit: 'INCHES' }, height: { magnitude: 0.3, unit: 'INCHES' } },
             transform: {
               scaleX: 1,
               scaleY: 1,
@@ -128,10 +104,7 @@ exports.handler = async (event, context) => {
         createTextBox: {
           elementProperties: {
             pageObjectId: pageId,
-            size: {
-              width: { magnitude: 9, unit: 'INCHES' },
-              height: { magnitude: 0.5, unit: 'INCHES' },
-            },
+            size: { width: { magnitude: 9, unit: 'INCHES' }, height: { magnitude: 0.5, unit: 'INCHES' } },
             transform: {
               scaleX: 1,
               scaleY: 1,
@@ -146,22 +119,14 @@ exports.handler = async (event, context) => {
 
       const citationsPerSlide = 3
       for (let i = 0; i < citations.length; i += citationsPerSlide) {
-        const citationBatch = citations.slice(i, i + citationsPerSlide)
-        const citationText = citationBatch
-          .map((citation, idx) => {
-            const globalIndex = i + idx + 1
-            return `[${globalIndex}] ${citation.title}\nAuthors: ${citation.authors}\nType: ${citation.type}\nLink: ${citation.url}`
-          })
-          .join('\n\n---\n\n')
+        const batch = citations.slice(i, i + citationsPerSlide)
+        const text = batch.map((c, idx) => `[${i + idx + 1}] ${c.title}\nAuthors: ${c.authors}\nType: ${c.type}`).join('\n\n---\n\n')
 
         requests.push({
           createTextBox: {
             elementProperties: {
               pageObjectId: pageId,
-              size: {
-                width: { magnitude: 9, unit: 'INCHES' },
-                height: { magnitude: 6, unit: 'INCHES' },
-              },
+              size: { width: { magnitude: 9, unit: 'INCHES' }, height: { magnitude: 6, unit: 'INCHES' } },
               transform: {
                 scaleX: 1,
                 scaleY: 1,
@@ -170,7 +135,7 @@ exports.handler = async (event, context) => {
                 unit: 'INCHES',
               },
             },
-            text: citationText,
+            text: text,
           },
         })
       }
@@ -181,10 +146,7 @@ exports.handler = async (event, context) => {
         createTextBox: {
           elementProperties: {
             pageObjectId: pageId,
-            size: {
-              width: { magnitude: 9, unit: 'INCHES' },
-              height: { magnitude: 1, unit: 'INCHES' },
-            },
+            size: { width: { magnitude: 9, unit: 'INCHES' }, height: { magnitude: 1, unit: 'INCHES' } },
             transform: {
               scaleX: 1,
               scaleY: 1,
@@ -198,40 +160,27 @@ exports.handler = async (event, context) => {
       })
     }
 
-    if (requests.length > 0) {
-      await slides.presentations.batchUpdate({
-        presentationId: presentationId,
-        requestBody: {
-          requests: requests,
-        },
-      })
-    }
+    // Add all content
+    await slides.presentations.batchUpdate({
+      presentationId: presentationId,
+      requestBody: { requests },
+    })
 
     const presentationUrl = `https://docs.google.com/presentation/d/${presentationId}/edit`
 
     return {
       statusCode: 200,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify({
         presentationId,
         presentationUrl,
-        message: 'Presentation created successfully',
       }),
     }
   } catch (error) {
-    console.error('Error creating Google Slides presentation:', error)
+    console.error('Create slides error:', error.message)
     return {
       statusCode: 500,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify({
-        error: 'Failed to create presentation',
-        message: error.message || 'Unknown error',
+        error: error.message,
       }),
     }
   }
