@@ -1,15 +1,5 @@
 const { google } = require('googleapis')
 
-const slides = google.slides('v1')
-
-async function getAuthenticatedClient() {
-  const auth = new google.auth.GoogleAuth({
-    credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY),
-    scopes: ['https://www.googleapis.com/auth/presentations', 'https://www.googleapis.com/auth/drive'],
-  })
-  return auth.getClient()
-}
-
 exports.handler = async (event, context) => {
   if (event.httpMethod !== 'POST') {
     return {
@@ -19,24 +9,34 @@ exports.handler = async (event, context) => {
   }
 
   try {
-    const { title, summary, citations, disclaimer, supportingSourceCount } = JSON.parse(event.body)
+    const { title, summary, citations, disclaimer, supportingSourceCount, accessToken } = JSON.parse(event.body)
 
-    const auth = await getAuthenticatedClient()
+    if (!accessToken) {
+      return {
+        statusCode: 401,
+        body: JSON.stringify({ error: 'No access token provided' }),
+      }
+    }
 
-    const createResponse = await slides.presentations.create(
-      {
-        auth: auth,
-        requestBody: {
-          title: title,
-        },
-      },
-      { maxRedirects: 5 }
+    const auth = new google.auth.OAuth2(
+      '45893805451-gpspi2ei5frk4fcanur2pfboqkur52j3.apps.googleusercontent.com'
     )
+
+    auth.setCredentials({
+      access_token: accessToken,
+    })
+
+    const slides = google.slides({ version: 'v1', auth })
+
+    const createResponse = await slides.presentations.create({
+      requestBody: {
+        title: title,
+      },
+    })
 
     const presentationId = createResponse.data.presentationId
 
     const slidesResponse = await slides.presentations.get({
-      auth: auth,
       presentationId: presentationId,
     })
 
@@ -192,7 +192,6 @@ exports.handler = async (event, context) => {
 
     if (requests.length > 0) {
       await slides.presentations.batchUpdate({
-        auth: auth,
         presentationId: presentationId,
         requestBody: {
           requests: requests,
@@ -221,3 +220,12 @@ exports.handler = async (event, context) => {
     }
   }
 }
+```
+
+---
+
+## **STEP 3: Update .env.local (Local Development)**
+
+**File Path:** `.env.local`
+```
+VITE_GOOGLE_CLIENT_ID=45893805451-gpspi2ei5frk4fcanur2pfboqkur52j3.apps.googleusercontent.com
