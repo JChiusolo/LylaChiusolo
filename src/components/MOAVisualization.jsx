@@ -809,5 +809,3 @@ function EvidenceTab() {
     </div>
   );
 }
-
-export default MOAVisualization;
