@@ -482,5 +482,4 @@ function FeatureCard({ title, color, items }) {
 function MounjuroTab() { return <div className="text-gray-700">Mounjaro detailed information...</div>; }
 function JardianceTab() { return <div className="text-gray-700">Jardiance detailed information...</div>; }
 function EvidenceTab() { return <div className="text-gray-700">Clinical evidence references...</div>; }
-
-export default MOAVisualization;
+;
