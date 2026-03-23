@@ -8,7 +8,7 @@ import {
 import HomePage from "./pages/HomePage";
 
 /**
- * Safe wrapper for search params so app doesn't crash
+ * Safe wrapper for search params
  */
 function useSafeSearchParams() {
   try {
@@ -20,7 +20,7 @@ function useSafeSearchParams() {
 }
 
 /**
- * Your existing logic preserved inside a routed page
+ * MOA Page
  */
 function MOAPage() {
   const [searchParams, setSearchParams] = useSafeSearchParams();
@@ -33,45 +33,33 @@ function MOAPage() {
 
   useEffect(() => {
     const params = new URLSearchParams();
-
-    if (selectedDrug) params.set("drug", selectedDrug);
-    if (activeTab) params.set("section", activeTab);
-
+    params.set("drug", selectedDrug);
+    params.set("section", activeTab);
     setSearchParams(params, { replace: true });
   }, [selectedDrug, activeTab, setSearchParams]);
 
   return (
-    <div style={{ padding: "20px", fontFamily: "Arial" }}>
+    <div style={{ padding: "20px" }}>
       <h1>MOA Visualization</h1>
-
-      <div style={{ marginBottom: "20px" }}>
-        <strong>Select Drug: </strong>
-        <button onClick={() => setSelectedDrug("both")}>Both</button>
-        <button onClick={() => setSelectedDrug("drugA")}>Drug A</button>
-        <button onClick={() => setSelectedDrug("drugB")}>Drug B</button>
-      </div>
-
-      <div style={{ marginBottom: "20px" }}>
-        <strong>Section: </strong>
-        <button onClick={() => setActiveTab("overview")}>Overview</button>
-        <button onClick={() => setActiveTab("mechanism")}>Mechanism</button>
-        <button onClick={() => setActiveTab("clinical")}>Clinical</button>
-      </div>
-
-      <div style={{ border: "1px solid #ccc", padding: "20px" }}>
-        <p>
-          <strong>Active Tab:</strong> {activeTab}
-        </p>
-        <p>
-          <strong>Selected Drug:</strong> {selectedDrug}
-        </p>
-      </div>
+      <p>Tab: {activeTab}</p>
+      <p>Drug: {selectedDrug}</p>
     </div>
   );
 }
 
 /**
- * Root App with routing (fixes HomePage error)
+ * Temporary placeholder pages (CRITICAL FIX)
+ */
+function SearchPage() {
+  return <div style={{ padding: 20 }}>Search Page</div>;
+}
+
+function DocsPage() {
+  return <div style={{ padding: 20 }}>Docs Page</div>;
+}
+
+/**
+ * Root App
  */
 export default function App() {
   return (
@@ -79,6 +67,13 @@ export default function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/moa" element={<MOAPage />} />
+
+        {/* 🔥 THESE FIX THE CRASH */}
+        <Route path="/search" element={<SearchPage />} />
+        <Route path="/docs" element={<DocsPage />} />
+
+        {/* fallback route */}
+        <Route path="*" element={<HomePage />} />
       </Routes>
     </BrowserRouter>
   );
