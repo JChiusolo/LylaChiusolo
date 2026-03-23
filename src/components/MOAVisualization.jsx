@@ -435,7 +435,7 @@ function SafetySummaryCard({ drug, data }) {
         </div>
 
         <div className="bg-white p-3 rounded">
-         <div className="text-xs font-medium text-orange-700 mb-1">{"SERIOUS (Rare, <1% incidence)"}</div>
+         <div className="text-xs font-medium text-orange-700 mb-1">SERIOUS (Rare, &lt;1% incidence)</div>
           <div className="text-sm text-gray-700">
             {seriousEvents.length > 0
               ? seriousEvents.map(e => e.event).join(', ')
