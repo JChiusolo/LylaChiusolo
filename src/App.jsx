@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  useSearchParams,
+} from "react-router-dom";
+import HomePage from "./pages/HomePage";
 
 /**
  * Safe wrapper for search params so app doesn't crash
@@ -13,18 +19,18 @@ function useSafeSearchParams() {
   }
 }
 
-export default function App() {
+/**
+ * Your existing logic preserved inside a routed page
+ */
+function MOAPage() {
   const [searchParams, setSearchParams] = useSafeSearchParams();
 
-  // ---- URL PARAMS (with safe defaults)
   const initialDrug = searchParams.get("drug") || "both";
   const initialSection = searchParams.get("section") || "overview";
 
-  // ---- STATE
   const [activeTab, setActiveTab] = useState(initialSection);
   const [selectedDrug, setSelectedDrug] = useState(initialDrug);
 
-  // ---- SYNC STATE → URL
   useEffect(() => {
     const params = new URLSearchParams();
 
@@ -34,43 +40,24 @@ export default function App() {
     setSearchParams(params, { replace: true });
   }, [selectedDrug, activeTab, setSearchParams]);
 
-  // ---- HANDLERS
-  const handleTabChange = (tab) => {
-    setActiveTab(tab);
-  };
-
-  const handleDrugChange = (drug) => {
-    setSelectedDrug(drug);
-  };
-
-  // ---- UI (replace with your real components as needed)
   return (
     <div style={{ padding: "20px", fontFamily: "Arial" }}>
       <h1>MOA Visualization</h1>
 
-      {/* Drug Selector */}
       <div style={{ marginBottom: "20px" }}>
         <strong>Select Drug: </strong>
-        <button onClick={() => handleDrugChange("both")}>Both</button>
-        <button onClick={() => handleDrugChange("drugA")}>Drug A</button>
-        <button onClick={() => handleDrugChange("drugB")}>Drug B</button>
+        <button onClick={() => setSelectedDrug("both")}>Both</button>
+        <button onClick={() => setSelectedDrug("drugA")}>Drug A</button>
+        <button onClick={() => setSelectedDrug("drugB")}>Drug B</button>
       </div>
 
-      {/* Tab Navigation */}
       <div style={{ marginBottom: "20px" }}>
         <strong>Section: </strong>
-        <button onClick={() => handleTabChange("overview")}>
-          Overview
-        </button>
-        <button onClick={() => handleTabChange("mechanism")}>
-          Mechanism
-        </button>
-        <button onClick={() => handleTabChange("clinical")}>
-          Clinical
-        </button>
+        <button onClick={() => setActiveTab("overview")}>Overview</button>
+        <button onClick={() => setActiveTab("mechanism")}>Mechanism</button>
+        <button onClick={() => setActiveTab("clinical")}>Clinical</button>
       </div>
 
-      {/* Content */}
       <div style={{ border: "1px solid #ccc", padding: "20px" }}>
         <p>
           <strong>Active Tab:</strong> {activeTab}
@@ -80,5 +67,19 @@ export default function App() {
         </p>
       </div>
     </div>
+  );
+}
+
+/**
+ * Root App with routing (fixes HomePage error)
+ */
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/moa" element={<MOAPage />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
