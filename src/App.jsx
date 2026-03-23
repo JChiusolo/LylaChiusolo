@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import SearchPage from './pages/SearchPage';
 import MOAVisualization from './components/MOAVisualization';
 
 export default function App() {
@@ -6,14 +7,17 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         {/* Existing routes */}
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<HomePage />} />
+        
+        {/* ENHANCED SEARCH PAGE */}
         <Route path="/search" element={<SearchPage />} />
         
-        {/* NEW MOA ROUTES */}
+        {/* MOA ROUTES - Now support URL params for smart navigation */}
         <Route path="/moa" element={<MOAVisualization />} />
         <Route path="/moa/:drug" element={<MOAVisualization />} />
         
-        {/* Other routes */}
+        {/* Catch-all */}
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
   );
