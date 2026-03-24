@@ -2,9 +2,10 @@ import { useState, useCallback } from 'react'
 import axios from 'axios'
 
 /**
- * Normalize a single source's result value to always be an array.
+ * Coerce a single source value to a plain array.
+ * Handles the various envelope shapes the API may return.
  */
-function normalizeSourceResults(value) {
+function toArray(value) {
   if (!value) return []
   if (Array.isArray(value)) return value
   if (Array.isArray(value.hits))     return value.hits
@@ -16,9 +17,10 @@ function normalizeSourceResults(value) {
 }
 
 /**
- * Normalize the full results map:
- *  - coerce every value to an array
- *  - remap camelCase keys from the API to the snake_case keys the UI expects
+ * Normalise the results map coming back from /api/search:
+ *  - remap camelCase "clinicalTrials" → snake_case "clinical_trials"
+ *    so it matches the sourceLabels key in ResultsList
+ *  - guarantee every value is an array so .map() never throws
  */
 function normalizeResults(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
@@ -30,18 +32,18 @@ function normalizeResults(raw) {
   }
 
   return Object.fromEntries(
-    Object.entries(raw).map(([source, value]) => [
-      KEY_MAP[source] ?? source,
-      normalizeSourceResults(value),
+    Object.entries(raw).map(([key, value]) => [
+      KEY_MAP[key] ?? key,
+      toArray(value),
     ])
   )
 }
 
 export default function useSearch() {
   const [results, setResults] = useState({})
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
   const [summary, setSummary] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState(null)
 
   const search = useCallback(async (query, filters) => {
     setLoading(true)
@@ -50,20 +52,8 @@ export default function useSearch() {
     setSummary(null)
 
     try {
-      const response = await axios.post('/api/search', {
-        question: query,
-        filters,
-      })
+      const response = await axios.post('/api/search', { question: query, filters })
       const data = response.data
       setResults(normalizeResults(data?.results))
       setSummary(data?.summary ?? null)
-    } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Search failed')
-      setResults({})
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  return { results, loading, error, search, summary }
-}
+    } catch
