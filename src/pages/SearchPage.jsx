@@ -1,159 +1,94 @@
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { AlertCircle, TrendingUp, Zap } from 'lucide-react';
+import { AlertCircle, TrendingUp, Loader } from 'lucide-react';
 
-/**
- * KEYWORD DETECTOR
- * Analyzes search queries to detect medical topics and drugs
- */
 class MedicalKeywordDetector {
-  
   static DRUG_PATTERNS = {
-    jardiance: {
-      keywords: ['jardiance', 'empagliflozin', 'sglt2'],
-      category: 'SGLT2 inhibitor'
-    },
-    mounjaro: {
-      keywords: ['mounjaro', 'tirzepatide', 'glp-1/gip', 'glp-1 gip'],
-      category: 'Dual GLP-1/GIP Agonist'
-    }
+    jardiance: { keywords: ['jardiance', 'empagliflozin', 'sglt2'], category: 'SGLT2 inhibitor' },
+    mounjaro:  { keywords: ['mounjaro', 'tirzepatide', 'glp-1/gip', 'glp-1 gip'], category: 'Dual GLP-1/GIP Agonist' },
   };
 
   static TOPIC_PATTERNS = {
-    adverseEvents: {
-      keywords: ['adverse', 'side effect', 'safety', 'event', 'toxicity', 'tolerability', 'adverse event'],
-      priority: 'HIGH'
-    },
-    mechanism: {
-      keywords: ['mechanism', 'moa', 'how.*work', 'receptor', 'pathway', 'target'],
-      priority: 'MEDIUM'
-    },
-    combination: {
-      keywords: ['combination', 'together', 'plus', 'dual', 'synerg'],
-      priority: 'MEDIUM'
-    },
-    efficacy: {
-      keywords: ['efficacy', 'effectiveness', 'reduction', 'a1c', 'weight loss', 'outcome'],
-      priority: 'LOW'
-    }
+    adverseEvents: { keywords: ['adverse', 'side effect', 'safety', 'event', 'toxicity', 'tolerability'], priority: 'HIGH' },
+    mechanism:     { keywords: ['mechanism', 'moa', 'how.*work', 'receptor', 'pathway', 'target'], priority: 'MEDIUM' },
+    combination:   { keywords: ['combination', 'together', 'plus', 'dual', 'synerg'], priority: 'MEDIUM' },
+    efficacy:      { keywords: ['efficacy', 'effectiveness', 'reduction', 'a1c', 'weight loss', 'outcome'], priority: 'LOW' },
   };
 
-  /**
-   * Detect drug in query
-   */
   static detectDrug(query) {
-    const lowerQuery = query.toLowerCase();
-    
+    const lower = query.toLowerCase();
     for (const [drugId, data] of Object.entries(this.DRUG_PATTERNS)) {
-      if (data.keywords.some(keyword => new RegExp(keyword, 'i').test(lowerQuery))) {
-        return {
-          drugId,
-          drugName: drugId.charAt(0).toUpperCase() + drugId.slice(1),
-          category: data.category
-        };
+      if (data.keywords.some(kw => new RegExp(kw, 'i').test(lower))) {
+        return { drugId, drugName: drugId.charAt(0).toUpperCase() + drugId.slice(1), category: data.category };
       }
     }
-    
     return null;
   }
 
-  /**
-   * Detect topics in query
-   */
   static detectTopics(query) {
-    const lowerQuery = query.toLowerCase();
-    const detectedTopics = [];
-
+    const lower = query.toLowerCase();
+    const found = [];
     for (const [topicId, data] of Object.entries(this.TOPIC_PATTERNS)) {
-      if (data.keywords.some(keyword => new RegExp(keyword, 'i').test(lowerQuery))) {
-        detectedTopics.push({
-          topicId,
-          displayName: topicId.replace(/([A-Z])/g, ' $1').trim(),
-          priority: data.priority
-        });
+      if (data.keywords.some(kw => new RegExp(kw, 'i').test(lower))) {
+        found.push({ topicId, displayName: topicId.replace(/([A-Z])/g, ' $1').trim(), priority: data.priority });
       }
     }
-
-    // Sort by priority
-    const priorityOrder = { HIGH: 0, MEDIUM: 1, LOW: 2 };
-    return detectedTopics.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+    const order = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+    return found.sort((a, b) => order[a.priority] - order[b.priority]);
   }
 
-  /**
-   * Main detection function
-   */
-  static analyze(query) {
-    if (!query || query.trim().length === 0) {
-      return null;
-    }
-
-    const drug = this.detectDrug(query);
-    const topics = this.detectTopics(query);
-
-    return {
-      query,
-      drug,
-      topics,
-      hasMOAMatch: drug && (topics.length > 0),
-      suggestedMOASection: this.getSuggestedSection(drug, topics[0])
-    };
-  }
-
-  /**
-   * Recommend which MOA section to navigate to
-   */
   static getSuggestedSection(drug, primaryTopic) {
     if (!drug) return null;
+    const map = { adverseEvents: 'adverse-events', mechanism: 'mechanism', combination: 'combination', efficacy: 'efficacy' };
+    return primaryTopic ? (map[primaryTopic.topicId] || 'overview') : 'overview';
+  }
 
-    const topicToSection = {
-      adverseEvents: 'adverse-events',
-      mechanism: 'mechanism',
-      combination: 'combination',
-      efficacy: 'efficacy'
-    };
-
-    return primaryTopic ? topicToSection[primaryTopic.topicId] : 'overview';
+  static analyze(query) {
+    if (!query?.trim()) return null;
+    const drug = this.detectDrug(query);
+    const topics = this.detectTopics(query);
+    return { query, drug, topics, hasMOAMatch: !!(drug && topics.length > 0), suggestedMOASection: this.getSuggestedSection(drug, topics[0]) };
   }
 }
 
-/**
- * MAIN SEARCH PAGE COMPONENT
- */
+// ── normalise whatever shape the API returns into { pubmed: [], clinical_trials: [] }
+function normalizeResults(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const KEY_MAP = { clinicalTrials: 'clinical_trials', clinical_trials: 'clinical_trials', pubmed: 'pubmed' }
+  return Object.fromEntries(
+    Object.entries(raw).map(([k, v]) => [KEY_MAP[k] ?? k, Array.isArray(v) ? v : []])
+  )
+}
+
 export default function SearchPage() {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [query, setQuery]               = useState('');
+  const [results, setResults]           = useState({});   // object keyed by source
+  const [summary, setSummary]           = useState(null);
+  const [loading, setLoading]           = useState(false);
+  const [error, setError]               = useState(null);
   const [keywordAnalysis, setKeywordAnalysis] = useState(null);
+  const [searched, setSearched]         = useState(false);
   const navigate = useNavigate();
 
-  /**
-   * Handle search submission
-   */
-  const handleSearch = useCallback(async (e) => {
-    e.preventDefault();
-    
-    if (!query.trim()) return;
+  const handleSearch = useCallback(async (e, overrideQuery) => {
+    if (e) e.preventDefault();
+    const q = (overrideQuery ?? query).trim();
+    if (!q) return;
 
     setLoading(true);
     setError(null);
+    setResults({});
+    setSummary(null);
+    setSearched(true);
 
     try {
-      // Analyze keywords BEFORE searching
-      const analysis = MedicalKeywordDetector.analyze(query);
-      setKeywordAnalysis(analysis);
+      setKeywordAnalysis(MedicalKeywordDetector.analyze(q));
 
-      // Fetch PubMed results
-      const response = await axios.get('/pubmed/results', {
-        params: {
-          term: query,
-          retmax: 10,
-          sort: 'date'
-        }
-      });
-
-      setResults(response.data || []);
+      const response = await axios.post('/api/search', { question: q });
+      const data = response.data;
+      setResults(normalizeResults(data?.results));
+      setSummary(data?.summary ?? null);
     } catch (err) {
       setError('Failed to fetch results. Please try again.');
       console.error('Search error:', err);
@@ -162,311 +97,197 @@ export default function SearchPage() {
     }
   }, [query]);
 
-  /**
-   * Navigate to MOA visualization with context
-   */
-  const navigateToMOA = (drugId, section) => {
-    navigate(`/moa/${drugId}?section=${section}`);
-  };
+  const navigateToMOA = (drugId, section) => navigate(`/moa?drug=${drugId}&section=${section}`);
+
+  // flatten all results into one array for display
+  const allResults = Object.values(results).flat();
+  const totalCount = allResults.length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 p-6">
       <div className="max-w-4xl mx-auto">
-        
-        {/* Header */}
+
         <header className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Medical Research Search
-          </h1>
-          <p className="text-lg text-gray-600">
-            Search PubMed, ClinicalTrials.gov, and view interactive drug information
-          </p>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Medical Research Search</h1>
+          <p className="text-lg text-gray-600">Search PubMed and ClinicalTrials.gov</p>
         </header>
 
-        {/* Search Form */}
         <form onSubmit={handleSearch} className="mb-8">
           <div className="flex gap-2">
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="e.g., 'Jardiance adverse events', 'Mounjaro mechanism', 'tirzepatide combination therapy'..."
+              placeholder="e.g. 'Jardiance adverse events', 'Mounjaro mechanism'..."
               className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 font-medium transition"
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 font-medium transition flex items-center gap-2"
             >
+              {loading && <Loader className="w-4 h-4 animate-spin" />}
               {loading ? 'Searching...' : 'Search'}
             </button>
           </div>
         </form>
 
-        {/* Error Message */}
         {error && (
           <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex gap-3">
             <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <h3 className="font-semibold text-red-900">Error</h3>
-              <p className="text-sm text-red-800">{error}</p>
-            </div>
+            <p className="text-sm text-red-800">{error}</p>
           </div>
         )}
 
-        {/* SMART MOA SUGGESTION BANNER */}
         {keywordAnalysis?.hasMOAMatch && (
-          <MOASuggestionBanner
-            analysis={keywordAnalysis}
-            onNavigate={navigateToMOA}
-          />
+          <MOASuggestionBanner analysis={keywordAnalysis} onNavigate={navigateToMOA} />
         )}
 
-        {/* Search Results */}
-        {results.length > 0 && (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              Research Results ({results.length})
-            </h2>
-            
-            <div className="space-y-4">
-              {results.map((result, idx) => (
-                <SearchResultCard
-                  key={idx}
-                  result={result}
-                  drugInfo={keywordAnalysis?.drug}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* No Results */}
-        {!loading && results.length === 0 && query && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
-            <p className="text-gray-700">
-              No results found for "{query}". Try different search terms or explore our drug profiles.
-            </p>
-            {keywordAnalysis?.drug && (
-              <button
-                onClick={() => navigateToMOA(keywordAnalysis.drug.drugId, 'overview')}
-                className="mt-4 px-6 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
-              >
-                View {keywordAnalysis.drug.drugName} Profile
-              </button>
+        {summary?.conclusion && (
+          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-5">
+            <h3 className="font-bold text-blue-900 mb-2">AI Summary</h3>
+            <p className="text-sm text-blue-800">{summary.conclusion}</p>
+            {summary.disclaimer && (
+              <p className="text-xs text-blue-600 mt-3 italic">{summary.disclaimer}</p>
             )}
           </div>
         )}
 
-        {/* Empty State */}
-        {!loading && results.length === 0 && !query && (
-          <EmptyState />
-        )}
-      </div>
-    </div>
-  );
-}
-
-/**
- * MOA SUGGESTION BANNER
- * Intelligently suggests viewing drug MOA based on search query
- */
-function MOASuggestionBanner({ analysis, onNavigate }) {
-  const { drug, topics, suggestedMOASection } = analysis;
-  
-  if (!drug) return null;
-
-  const topicEmojis = {
-    adverseEvents: '⚠️',
-    mechanism: '🔬',
-    combination: '💊',
-    efficacy: '📈'
-  };
-
-  const topicNames = {
-    adverseEvents: 'Safety Profile',
-    mechanism: 'Mechanism of Action',
-    combination: 'Combination Therapy',
-    efficacy: 'Efficacy Data'
-  };
-
-  const primaryTopic = topics[0];
-  const emoji = topicEmojis[primaryTopic?.topicId] || '💡';
-  const topicName = topicNames[primaryTopic?.topicId] || 'Overview';
-
-  return (
-    <div className="mb-8 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-lg p-6 shadow-lg">
-      <div className="flex items-start gap-4">
-        <div className="text-3xl">{emoji}</div>
-        
-        <div className="flex-1">
-          <h3 className="text-lg font-bold text-blue-900 mb-1">
-            We found what you're looking for!
-          </h3>
-          
-          <p className="text-sm text-blue-800 mb-3">
-            Your search mentions <strong>{drug.drugName}</strong> and we detected you're interested in 
-            <strong> {topicName}</strong>.
-          </p>
-
-          <div className="flex flex-wrap gap-2 mb-4">
-            {topics.map((topic) => (
-              <span
-                key={topic.topicId}
-                className="inline-block bg-blue-200 text-blue-900 px-3 py-1 rounded-full text-xs font-medium"
-              >
-                {topic.displayName}
-              </span>
+        {loading && (
+          <div className="space-y-4">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="bg-white rounded-lg p-6 animate-pulse">
+                <div className="h-5 bg-gray-200 rounded w-3/4 mb-3"></div>
+                <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
+                <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+              </div>
             ))}
           </div>
+        )}
 
+        {!loading && totalCount > 0 && (
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold text-gray-900">
+              {totalCount} result{totalCount !== 1 ? 's' : ''}
+            </h2>
+            {Object.entries(results).map(([source, articles]) =>
+              articles.map((article, idx) => (
+                <SearchResultCard
+                  key={article.id ?? `${source}-${idx}`}
+                  article={article}
+                  source={source}
+                />
+              ))
+            )}
+          </div>
+        )}
+
+        {!loading && searched && totalCount === 0 && !error && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+            <p className="text-gray-700">No results found for "{query}".</p>
+          </div>
+        )}
+
+        {!loading && !searched && <EmptyState onSearch={(q) => { setQuery(q); handleSearch(null, q); }} />}
+      </div>
+    </div>
+  );
+}
+
+function MOASuggestionBanner({ analysis, onNavigate }) {
+  const { drug, topics, suggestedMOASection } = analysis;
+  if (!drug) return null;
+  const topicNames = { adverseEvents: 'Safety Profile', mechanism: 'Mechanism of Action', combination: 'Combination Therapy', efficacy: 'Efficacy Data' };
+  const topicEmojis = { adverseEvents: '⚠️', mechanism: '🔬', combination: '💊', efficacy: '📈' };
+  const primary = topics[0];
+  return (
+    <div className="mb-8 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-lg p-6">
+      <div className="flex items-start gap-4">
+        <div className="text-3xl">{topicEmojis[primary?.topicId] || '💡'}</div>
+        <div className="flex-1">
+          <h3 className="text-lg font-bold text-blue-900 mb-1">We found what you are looking for!</h3>
+          <p className="text-sm text-blue-800 mb-3">
+            Your search mentions <strong>{drug.drugName}</strong> — view the interactive <strong>{topicNames[primary?.topicId] || 'Overview'}</strong>.
+          </p>
           <button
             onClick={() => onNavigate(drug.drugId, suggestedMOASection)}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition shadow-md hover:shadow-lg"
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition"
           >
-            View {drug.drugName} {topicName} →
+            View {drug.drugName} {topicNames[primary?.topicId] || 'Overview'} →
           </button>
-        </div>
-
-        <div className="text-2xl">
-          {drug.drugId === 'jardiance' ? '💧' : '💉'}
         </div>
       </div>
     </div>
   );
 }
 
-/**
- * SEARCH RESULT CARD
- * Displays individual PubMed search result
- */
-function SearchResultCard({ result, drugInfo }) {
+function SearchResultCard({ article, source }) {
   const [expanded, setExpanded] = useState(false);
+  const isPubMed = source === 'pubmed';
+  const bodyText = article.abstract ?? article.summary ?? null;
+  const displayDate = article.publicationDate ?? article.pubDate ?? article.startDate ?? null;
+
+  const authorText = Array.isArray(article.authors) && article.authors.length > 0
+    ? article.authors.slice(0, 3).map(a => typeof a === 'string' ? a : `${a.firstName ?? ''} ${a.lastName ?? ''}`.trim()).join(', ')
+    : null;
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg transition">
-      <h3 className="text-lg font-semibold text-blue-600 hover:text-blue-800 cursor-pointer">
-        {result.title || 'Untitled'}
-      </h3>
-      
-      {result.authors && (
-        <p className="text-sm text-gray-600 mt-2">
-          {result.authors.slice(0, 3).join(', ')}
-          {result.authors.length > 3 && ` et al.`}
+      <div className="flex justify-between items-start gap-3 mb-2">
+        <h3 className="text-lg font-semibold text-blue-800 leading-snug">{article.title || 'Untitled'}</h3>
+        <span className={`text-xs px-2 py-1 rounded font-medium shrink-0 ${isPubMed ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
+          {isPubMed ? 'PubMed' : 'Trial'}
+        </span>
+      </div>
+      {authorText && <p className="text-sm text-gray-600 mt-1">{authorText}</p>}
+      {article.journal && <p className="text-xs text-gray-500 mt-1 italic">{article.journal}</p>}
+      {displayDate && <p className="text-xs text-gray-500 mt-1">{displayDate}</p>}
+      {!isPubMed && article.status && (
+        <p className={`text-xs font-medium mt-1 ${article.status === 'RECRUITING' ? 'text-green-700' : 'text-gray-600'}`}>
+          {article.status}
         </p>
       )}
-
-      {result.journal && (
-        <p className="text-xs text-gray-500 mt-1">
-          {result.journal} {result.year}
-        </p>
-      )}
-
-      {result.abstract && (
-        <div className="mt-4">
-          <p className="text-sm text-gray-700 line-clamp-3">
-            {result.abstract}
-          </p>
-          
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="text-xs text-blue-600 hover:text-blue-800 mt-2 font-medium"
-          >
+      {bodyText && (
+        <>
+          <p className={`text-sm text-gray-700 mt-3 ${expanded ? '' : 'line-clamp-3'}`}>{bodyText}</p>
+          <button onClick={() => setExpanded(!expanded)} className="text-xs text-blue-600 hover:text-blue-800 mt-2 font-medium">
             {expanded ? 'Show less' : 'Show more'}
           </button>
-
-          {expanded && (
-            <p className="text-sm text-gray-700 mt-3">{result.abstract}</p>
-          )}
-        </div>
+        </>
       )}
-
-      {result.pmid && (
-        <a
-          href={`https://pubmed.ncbi.nlm.nih.gov/${result.pmid}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-gray-500 hover:text-blue-600 mt-4 inline-block underline"
-        >
-          View on PubMed →
+      {article.url && (
+        <a href={article.url} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 hover:text-blue-600 mt-3 inline-block underline">
+          {isPubMed ? `PMID: ${article.id}` : `NCT: ${article.id}`} →
         </a>
       )}
     </div>
   );
 }
 
-/**
- * EMPTY STATE
- * Shows helpful suggestions when page loads
- */
-function EmptyState() {
+function EmptyState({ onSearch }) {
+  const suggestions = [
+    { title: 'Jardiance Adverse Events', description: 'Safety profile and side effects', query: 'Jardiance adverse events' },
+    { title: 'Mounjaro Mechanism', description: 'How tirzepatide works', query: 'Mounjaro mechanism of action' },
+    { title: 'Combination Therapy', description: 'Mounjaro + Jardiance together', query: 'tirzepatide empagliflozin combination' },
+    { title: 'Clinical Trials', description: 'Recent research and outcomes', query: 'Mounjaro clinical trials T2D' },
+  ];
   return (
     <div className="bg-white rounded-lg p-12 text-center">
       <TrendingUp className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-      
-      <h2 className="text-2xl font-bold text-gray-900 mb-2">
-        Search Medical Research
-      </h2>
-      
-      <p className="text-gray-600 mb-8">
-        Try searching for drug names, adverse events, mechanisms of action, or clinical trial information.
-      </p>
-
+      <h2 className="text-2xl font-bold text-gray-900 mb-2">Search Medical Research</h2>
+      <p className="text-gray-600 mb-8">Try searching for drug names, adverse events, mechanisms, or clinical trials.</p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto">
-        <SuggestionCard
-          title="Jardiance Adverse Events"
-          description="Safety profile and side effects"
-          query="Jardiance adverse events"
-        />
-        <SuggestionCard
-          title="Mounjaro Mechanism"
-          description="How tirzepatide works"
-          query="Mounjaro mechanism of action"
-        />
-        <SuggestionCard
-          title="Combination Therapy"
-          description="Mounjaro + Jardiance together"
-          query="tirzepatide empagliflozin combination"
-        />
-        <SuggestionCard
-          title="Clinical Trials"
-          description="Recent research and outcomes"
-          query="Mounjaro clinical trials T2D"
-        />
+        {suggestions.map(s => (
+          <div key={s.query} className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition text-left">
+            <h3 className="font-semibold text-gray-900 mb-1">{s.title}</h3>
+            <p className="text-sm text-gray-600 mb-3">{s.description}</p>
+            <button onClick={() => onSearch(s.query)} className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition">
+              Search
+            </button>
+          </div>
+        ))}
       </div>
     </div>
-  );
-}
-
-/**
- * SUGGESTION CARD
- * Quick search suggestions
- */
-function SuggestionCard({ title, description, query }) {
-  const [inputValue, setInputValue] = React.useState(query);
-  const navigate = useNavigate();
-
-  const handleSuggestedSearch = async (e) => {
-    e.preventDefault();
-    
-    // Trigger search by setting query and submitting
-    const form = e.currentTarget.closest('form');
-    if (form) {
-      form.dispatchEvent(new Event('submit', { bubbles: true }));
-    }
-  };
-
-  return (
-    <form onSubmit={handleSuggestedSearch} className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition">
-      <h3 className="font-semibold text-gray-900 mb-1">{title}</h3>
-      <p className="text-sm text-gray-600 mb-3">{description}</p>
-      <button
-        type="submit"
-        className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition"
-      >
-        Search
-      </button>
-    </form>
   );
 }
 
