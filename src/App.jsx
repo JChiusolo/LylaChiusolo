@@ -6,54 +6,19 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import HomePage from "./pages/HomePage";
+import SearchPage from "./pages/SearchPage";
+import MOAVisualization from "./components/MOAVisualization";
 
 /**
- * Safe wrapper for search params
- */
-function useSafeSearchParams() {
-  try {
-    return useSearchParams();
-  } catch (e) {
-    console.warn("Router not available. Falling back to defaults.");
-    return [new URLSearchParams(), () => {}];
-  }
-}
-
-/**
- * MOA Page
+ * MOA Page — wraps MOAVisualization with URL param sync
  */
 function MOAPage() {
-  const [searchParams, setSearchParams] = useSafeSearchParams();
-
-  const initialDrug = searchParams.get("drug") || "both";
-  const initialSection = searchParams.get("section") || "overview";
-
-  const [activeTab, setActiveTab] = useState(initialSection);
-  const [selectedDrug, setSelectedDrug] = useState(initialDrug);
-
-  useEffect(() => {
-    const params = new URLSearchParams();
-    params.set("drug", selectedDrug);
-    params.set("section", activeTab);
-    setSearchParams(params, { replace: true });
-  }, [selectedDrug, activeTab, setSearchParams]);
-
-  return (
-    <div style={{ padding: "20px" }}>
-      <h1>MOA Visualization</h1>
-      <p>Tab: {activeTab}</p>
-      <p>Drug: {selectedDrug}</p>
-    </div>
-  );
+  return <MOAVisualization />;
 }
 
 /**
- * Temporary placeholder pages (CRITICAL FIX)
+ * Docs placeholder
  */
-function SearchPage() {
-  return <div style={{ padding: 20 }}>Search Page</div>;
-}
-
 function DocsPage() {
   return <div style={{ padding: 20 }}>Docs Page</div>;
 }
@@ -67,12 +32,8 @@ export default function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/moa" element={<MOAPage />} />
-
-        {/* 🔥 THESE FIX THE CRASH */}
         <Route path="/search" element={<SearchPage />} />
         <Route path="/docs" element={<DocsPage />} />
-
-        {/* fallback route */}
         <Route path="*" element={<HomePage />} />
       </Routes>
     </BrowserRouter>
