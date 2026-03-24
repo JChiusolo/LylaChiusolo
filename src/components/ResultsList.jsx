@@ -1,66 +1,95 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { ChevronDown } from 'lucide-react'
 import ResultCard from './ResultCard'
 
-// Keys now match what the search function returns: "pubmed" and "clinicalTrials"
 const sourceLabels = {
-  pubmed: { name: 'PubMed', icon: '🔬', color: 'bg-blue-100' },
-  clinicalTrials: { name: 'Clinical Trials', icon: '⚕️', color: 'bg-green-100' }
+  pubmed:          { name: 'PubMed',          icon: '🔬', color: 'bg-blue-100'  },
+  clinical_trials: { name: 'Clinical Trials',  icon: '⚕️', color: 'bg-green-100' },
 }
 
-export default function ResultsList({ results }) {
-  // results arrives as { pubmed: [...], clinicalTrials: [...] }
-  const safeResults = results ?? {}
+const DEFAULT_LABEL = { name: 'Results', icon: '📄', color: 'bg-neutral-100' }
 
-  const [expanded, setExpanded] = useState(
-    new Set(Object.keys(safeResults).filter(k => safeResults[k]?.length > 0))
-  )
+export default function ResultsList({ results }) {
+  // Initialize to empty — useEffect below keeps this in sync with props.
+  // Using useState(derivedFromProps) only runs once on mount, so it would
+  // stay stale when results changed — replaced with useEffect pattern.
+  const [expanded, setExpanded] = useState(new Set())
+
+  useEffect(() => {
+    // Auto-expand every source that has at least one result
+    const sourcesWithResults = Object.keys(results).filter(
+      (k) => Array.isArray(results[k]) && results[k].length > 0
+    )
+    setExpanded(new Set(sourcesWithResults))
+  }, [results])
 
   const toggle = (source) => {
-    const newExpanded = new Set(expanded)
-    newExpanded.has(source) ? newExpanded.delete(source) : newExpanded.add(source)
-    setExpanded(newExpanded)
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      next.has(source) ? next.delete(source) : next.add(source)
+      return next
+    })
   }
 
-  const totalResults = Object.values(safeResults).reduce((sum, arr) => sum + (arr?.length || 0), 0)
+  const totalResults = Object.values(results).reduce(
+    (sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0),
+    0
+  )
+
+  const sourcesWithResults = Object.entries(results).filter(
+    ([, articles]) => Array.isArray(articles) && articles.length > 0
+  )
+
+  if (sourcesWithResults.length === 0) return null
 
   return (
     <div>
       <div className="mb-6 card p-4 bg-primary-50">
-        <h3 className="font-semibold text-neutral-900">Found {totalResults} results</h3>
+        <h3 className="font-semibold text-neutral-900">
+          Found {totalResults} result{totalResults !== 1 ? 's' : ''}
+        </h3>
       </div>
 
-      {Object.entries(safeResults)
-        .filter(([_, articles]) => articles?.length > 0)
-        .map(([source, articles]) => {
-          const info = sourceLabels[source] ?? { name: source, icon: '📄', color: 'bg-neutral-100' }
-          return (
-            <div key={source} className="mb-4">
-              <button onClick={() => toggle(source)} className="w-full card p-4 text-left hover:shadow-md">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`text-2xl ${info.color} w-10 h-10 rounded-lg flex items-center justify-center`}>
-                      {info.icon}
-                    </div>
-                    <div>
-                      <h3 className="font-bold">{info.name}</h3>
-                      <p className="text-sm text-neutral-600">{articles.length} results</p>
-                    </div>
+      {sourcesWithResults.map(([source, articles]) => {
+        const info = sourceLabels[source] ?? { ...DEFAULT_LABEL, name: source }
+        return (
+          <div key={source} className="mb-4">
+            <button
+              onClick={() => toggle(source)}
+              className="w-full card p-4 text-left hover:shadow-md"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`text-2xl ${info.color} w-10 h-10 rounded-lg flex items-center justify-center`}
+                  >
+                    {info.icon}
                   </div>
-                  <ChevronDown className={`w-5 h-5 transition-transform ${expanded.has(source) ? 'rotate-180' : ''}`} />
+                  <div>
+                    <h3 className="font-bold">{info.name}</h3>
+                    <p className="text-sm text-neutral-600">
+                      {articles.length} result{articles.length !== 1 ? 's' : ''}
+                    </p>
+                  </div>
                 </div>
-              </button>
+                <ChevronDown
+                  className={`w-5 h-5 transition-transform ${
+                    expanded.has(source) ? 'rotate-180' : ''
+                  }`}
+                />
+              </div>
+            </button>
 
-              {expanded.has(source) && (
-                <div className="space-y-3 mt-3">
-                  {articles.map((article, idx) => (
-                    <ResultCard key={idx} article={article} source={source} />
-                  ))}
-                </div>
-              )}
-            </div>
-          )
-        })}
+            {expanded.has(source) && (
+              <div className="space-y-3 mt-3">
+                {articles.map((article, idx) => (
+                  <ResultCard key={article.id ?? idx} article={article} source={source} />
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
