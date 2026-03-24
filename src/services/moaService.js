@@ -1,27 +1,15 @@
 import axios from 'axios';
 
-/**
- * MOA Service
- * Integrates with existing Lyla APIs for clinical evidence
- */
 export const moaService = {
-  
-  /**
-   * Search PubMed for combination therapy evidence
-   */
+
   searchCombinationEvidence: async (options = {}) => {
     const {
       searchTerms = 'tirzepatide empagliflozin combination type 2 diabetes',
-      maxResults = 20
+      maxResults = 20,
     } = options;
-
     try {
       const response = await axios.get('/pubmed/results', {
-        params: {
-          term: searchTerms,
-          retmax: maxResults,
-          sort: 'date' // Most recent first
-        }
+        params: { term: searchTerms, retmax: maxResults, sort: 'date' },
       });
       return response.data;
     } catch (error) {
@@ -30,23 +18,15 @@ export const moaService = {
     }
   },
 
-  /**
-   * Search clinical trials for Mounjaro + Jardiance
-   */
   searchClinicalTrials: async (options = {}) => {
     const {
       condition = 'type 2 diabetes',
       intervention = 'tirzepatide empagliflozin',
-      status = 'RECRUITING'
+      status = 'RECRUITING',
     } = options;
-
     try {
       const response = await axios.get('/clinicaltrials/results', {
-        params: {
-          term: `${intervention} ${condition}`,
-          status: status,
-          type: 'Interventional'
-        }
+        params: { term: `${intervention} ${condition}`, status, type: 'Interventional' },
       });
       return response.data;
     } catch (error) {
@@ -56,39 +36,31 @@ export const moaService = {
   },
 
   /**
-   * Get mechanism details for a specific drug
+   * Fixed: path is relative to src/services/ → src/data/drugMechanisms.js
+   * Also requires the file to be moved from src/src/data/ → src/data/
    */
   getDrugMechanisms: async (drugId) => {
-    // Could fetch from database in future
-    // For now, returns from local data
     const { drugMechanisms } = await import('../data/drugMechanisms.js');
     return drugMechanisms[drugId];
   },
 
-  /**
-   * Search for drug interactions
-   */
   searchDrugInteractions: async () => {
-    // Future: integrate with DrugBank or similar API
     return {
       mounjaro: { jardiance: 'No significant interactions' },
-      interaction: 'SAFE TO COMBINE'
+      interaction: 'SAFE TO COMBINE',
     };
   },
 
-  /**
-   * Get evidence citations with links
-   */
   getCitations: async () => {
     return {
       mounjaro: [
         { title: 'SUSTAIN trials', url: 'https://pubmed.ncbi.nlm.nih.gov', year: 2023 },
-        { title: 'SURMOUNT trials', url: 'https://pubmed.ncbi.nlm.nih.gov', year: 2022 }
+        { title: 'SURMOUNT trials', url: 'https://pubmed.ncbi.nlm.nih.gov', year: 2022 },
       ],
       jardiance: [
         { title: 'EMPA-REG OUTCOME', url: 'https://pubmed.ncbi.nlm.nih.gov', year: 2015 },
-        { title: 'CREDENCE', url: 'https://pubmed.ncbi.nlm.nih.gov', year: 2020 }
-      ]
+        { title: 'CREDENCE', url: 'https://pubmed.ncbi.nlm.nih.gov', year: 2020 },
+      ],
     };
-  }
+  },
 };
