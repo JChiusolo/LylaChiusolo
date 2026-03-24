@@ -56,4 +56,13 @@ export default function useSearch() {
       const data = response.data
       setResults(normalizeResults(data?.results))
       setSummary(data?.summary ?? null)
-    } catch
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Search failed')
+      setResults({})
+    } finally {
+      setLoading(false)
+    }
+  }, [])  // stable reference — no deps needed, state setters never change
+
+  return { results, summary, loading, error, search }
+}
