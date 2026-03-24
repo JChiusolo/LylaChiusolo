@@ -110,7 +110,8 @@ export default function ResultCard({ article, source }) {
         <span className="text-xs text-neutral-500">{identifier}</span>
          {article.url && (
           
-            href={article.url}
+            <a
+              href={article.url}
             target="_blank"
             rel="noopener noreferrer"
             className="text-primary-600 text-sm flex items-center gap-1 hover:underline"
