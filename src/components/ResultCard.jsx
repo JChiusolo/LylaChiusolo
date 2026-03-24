@@ -108,7 +108,7 @@ export default function ResultCard({ article, source }) {
 
       <div className="border-t border-neutral-200 px-5 py-3 bg-neutral-50 flex justify-between items-center">
         <span className="text-xs text-neutral-500">{identifier}</span>
-        {article.url && (
+         {article.url && (
           
             href={article.url}
             target="_blank"
