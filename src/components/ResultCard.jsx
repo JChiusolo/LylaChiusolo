@@ -5,36 +5,30 @@ export default function ResultCard({ article, source }) {
   const [expanded, setExpanded] = useState(false)
 
   const isPubMed = source === 'pubmed'
-  const isTrial  = source === 'clinical_trials'
+  const isTrial = source === 'clinical_trials'
+  const badgeColor = isPubMed ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
 
-  const badgeColor = isPubMed
-    ? 'bg-blue-100 text-blue-800'
-    : 'bg-green-100 text-green-800'
-
-  const bodyText    = article.summary ?? article.abstract ?? null
-  const displayDate = isPubMed ? article.pubDate : article.startDate
+  const bodyText = article.abstract ?? article.summary ?? null
+  const displayDate = article.publicationDate ?? article.pubDate ?? article.startDate ?? null
 
   const authorText = Array.isArray(article.authors) && article.authors.length > 0
-    ? article.authors.slice(0, 3).join(', ')
+    ? article.authors.slice(0, 3).map((a) => {
+        if (typeof a === 'string') return a
+        return `${a.firstName ?? ''} ${a.lastName ?? ''}`.trim()
+      }).join(', ')
     : null
 
-  const conditions    = Array.isArray(article.conditions)    ? article.conditions.slice(0, 3)    : []
+  const conditions = Array.isArray(article.conditions) ? article.conditions.slice(0, 3) : []
   const interventions = Array.isArray(article.interventions) ? article.interventions.slice(0, 3) : []
+  const identifier = article.pmid ? `PMID: ${article.pmid}` : `NCT: ${article.id}`
 
-  const identifier = isPubMed ? `PMID: ${article.id}` : `NCT: ${article.id}`
-
-  const viewLink = article.url
-    ? React.createElement(
-        'a',
-        {
-          href: article.url,
-          target: '_blank',
-          rel: 'noopener noreferrer',
-          className: 'text-primary-600 text-sm flex items-center gap-1 hover:underline',
-        },
-        'View ',
-        React.createElement(ExternalLink, { className: 'w-4 h-4' })
-      )
+  const footerLink = article.url
+    ? React.createElement('a', {
+        href: article.url,
+        target: '_blank',
+        rel: 'noopener noreferrer',
+        className: 'text-primary-600 text-sm flex items-center gap-1 hover:underline',
+      }, 'View ', React.createElement(ExternalLink, { className: 'w-4 h-4' }))
     : null
 
   return (
@@ -44,11 +38,9 @@ export default function ResultCard({ article, source }) {
           <h3 className="text-lg font-semibold text-neutral-900 leading-snug">{article.title}</h3>
           <span className={`badge shrink-0 ${badgeColor}`}>{isPubMed ? 'PubMed' : 'Trial'}</span>
         </div>
-
         {bodyText && (
           <p className="text-sm text-neutral-600 mb-4 line-clamp-2">{bodyText}</p>
         )}
-
         <div className="space-y-1 mb-4 text-sm text-neutral-600">
           {isPubMed && authorText && (
             <div className="flex items-center gap-2">
@@ -89,7 +81,6 @@ export default function ResultCard({ article, source }) {
             </div>
           )}
         </div>
-
         {bodyText && (
           <button
             onClick={() => setExpanded(!expanded)}
@@ -100,16 +91,14 @@ export default function ResultCard({ article, source }) {
           </button>
         )}
       </div>
-
       {expanded && bodyText && (
         <div className="border-t border-neutral-200 p-5 bg-neutral-50">
           <p className="text-sm text-neutral-700 leading-relaxed">{bodyText}</p>
         </div>
       )}
-
       <div className="border-t border-neutral-200 px-5 py-3 bg-neutral-50 flex justify-between items-center">
         <span className="text-xs text-neutral-500">{identifier}</span>
-        {viewLink}
+        {footerLink}
       </div>
     </div>
   )

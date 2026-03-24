@@ -1,41 +1,26 @@
 import { useState, useCallback } from 'react'
 import axios from 'axios'
 
-/**
- * Coerce a single source value to a plain array.
- * Handles the various envelope shapes the API may return.
- */
 function toArray(value) {
   if (!value) return []
   if (Array.isArray(value)) return value
-  if (Array.isArray(value.hits))     return value.hits
-  if (Array.isArray(value.results))  return value.results
+  if (Array.isArray(value.hits)) return value.hits
+  if (Array.isArray(value.results)) return value.results
   if (Array.isArray(value.articles)) return value.articles
-  if (Array.isArray(value.studies))  return value.studies
-  if (typeof value === 'object')     return [value]
+  if (Array.isArray(value.studies)) return value.studies
+  if (typeof value === 'object') return [value]
   return []
 }
 
-/**
- * Normalise the results map coming back from /api/search:
- *  - remap camelCase "clinicalTrials" → snake_case "clinical_trials"
- *    so it matches the sourceLabels key in ResultsList
- *  - guarantee every value is an array so .map() never throws
- */
 function normalizeResults(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
-
   const KEY_MAP = {
-    clinicalTrials:  'clinical_trials',
+    clinicalTrials: 'clinical_trials',
     clinical_trials: 'clinical_trials',
-    pubmed:          'pubmed',
+    pubmed: 'pubmed',
   }
-
   return Object.fromEntries(
-    Object.entries(raw).map(([key, value]) => [
-      KEY_MAP[key] ?? key,
-      toArray(value),
-    ])
+    Object.entries(raw).map(([key, value]) => [KEY_MAP[key] ?? key, toArray(value)])
   )
 }
 
@@ -43,14 +28,13 @@ export default function useSearch() {
   const [results, setResults] = useState({})
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState(null)
+  const [error, setError] = useState(null)
 
   const search = useCallback(async (query, filters) => {
     setLoading(true)
     setError(null)
     setResults({})
     setSummary(null)
-
     try {
       const response = await axios.post('/api/search', { question: query, filters })
       const data = response.data
@@ -62,7 +46,7 @@ export default function useSearch() {
     } finally {
       setLoading(false)
     }
-  }, [])  // stable reference — no deps needed, state setters never change
+  }, [])
 
   return { results, summary, loading, error, search }
 }

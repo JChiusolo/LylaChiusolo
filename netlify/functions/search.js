@@ -30,7 +30,6 @@ Return this exact structure:
       },
     ],
   });
-
   const text = response.content.find((b) => b.type === "text")?.text ?? "";
   return JSON.parse(text);
 }
@@ -38,41 +37,30 @@ Return this exact structure:
 async function searchPubMed(parsedQuery, maxResults) {
   const term = encodeURIComponent(parsedQuery.pubmed.query);
   const baseUrl = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils";
-  const apiKey = process.env.PUBMED_API_KEY
-    ? `&api_key=${process.env.PUBMED_API_KEY}`
-    : "";
+  const apiKey = process.env.PUBMED_API_KEY ? `&api_key=${process.env.PUBMED_API_KEY}` : "";
 
-  const searchUrl = `${baseUrl}/esearch.fcgi?db=pubmed&term=${term}&retmax=${maxResults}&retmode=json&usehistory=y${apiKey}`;
-  const searchRes = await fetch(searchUrl);
+  const searchRes = await fetch(`${baseUrl}/esearch.fcgi?db=pubmed&term=${term}&retmax=${maxResults}&retmode=json${apiKey}`);
   const searchData = await searchRes.json();
   const ids = searchData.esearchresult?.idlist ?? [];
-
   if (ids.length === 0) return [];
 
-  const summaryUrl = `${baseUrl}/esummary.fcgi?db=pubmed&id=${ids.join(",")}&retmode=json${apiKey}`;
-  const summaryRes = await fetch(summaryUrl);
+  const summaryRes = await fetch(`${baseUrl}/esummary.fcgi?db=pubmed&id=${ids.join(",")}&retmode=json${apiKey}`);
   const summaryData = await summaryRes.json();
 
   return ids.map((id) => {
     const doc = summaryData.result?.[id] ?? {};
-
-    // Split "Smith J" style author strings into firstName/lastName objects
-    // so ResultCard's existing a.firstName + a.lastName code works unchanged
     const rawAuthors = (doc.authors ?? []).slice(0, 3);
     const authors = rawAuthors.map((a) => {
       const name = typeof a === "string" ? a : (a.name ?? "");
       const parts = name.trim().split(" ");
-      const lastName = parts[0] ?? "";
-      const firstName = parts.slice(1).join(" ");
-      return { firstName, lastName };
+      return { lastName: parts[0] ?? "", firstName: parts.slice(1).join(" ") };
     });
-
     return {
       id,
       pmid: id,
       title: doc.title ?? "No title",
       authors,
-      abstract: (doc.title ?? ""),
+      abstract: doc.title ?? "",
       journal: doc.fulljournalname ?? doc.source ?? "",
       publicationDate: doc.pubdate ?? "",
       pubDate: doc.pubdate ?? "",
@@ -84,34 +72,26 @@ async function searchPubMed(parsedQuery, maxResults) {
 
 async function searchClinicalTrials(parsedQuery, maxResults) {
   const { condition, intervention, keywords } = parsedQuery.clinicalTrials;
-
   const params = new URLSearchParams({
     format: "json",
     pageSize: String(maxResults),
-    fields:
-      "NCTId,BriefTitle,OverallStatus,Condition,InterventionName,BriefSummary,StartDate",
+    fields: "NCTId,BriefTitle,OverallStatus,Condition,InterventionName,BriefSummary,StartDate",
   });
-
   const queryParts = [];
   if (condition) queryParts.push(condition);
   if (intervention) queryParts.push(intervention);
   if (keywords?.length) queryParts.push(...keywords.slice(0, 2));
   params.set("query.term", queryParts.join(" "));
 
-  const url = `https://clinicaltrials.gov/api/v2/studies?${params}`;
-  const res = await fetch(url);
+  const res = await fetch(`https://clinicaltrials.gov/api/v2/studies?${params}`);
   const data = await res.json();
 
   return (data.studies ?? []).map((s) => {
     const p = s.protocolSection ?? {};
     const id = p.identificationModule?.nctId ?? "";
-
-    // conditions and interventions must be arrays for ResultCard
     const conditions = p.conditionsModule?.conditions ?? [];
-    const interventions = (p.armsInterventionsModule?.interventions ?? [])
-      .map((i) => i.name)
-      .slice(0, 3);
-
+    const interventions = (p.armsInterventionsModule?.interventions ?? []).map((i) => i.name).slice(0, 3);
+    const briefSummary = (p.descriptionModule?.briefSummary ?? "").slice(0, 300);
     return {
       id,
       pmid: null,
@@ -119,8 +99,8 @@ async function searchClinicalTrials(parsedQuery, maxResults) {
       status: p.statusModule?.overallStatus ?? "",
       conditions: Array.isArray(conditions) ? conditions : [],
       interventions: Array.isArray(interventions) ? interventions : [],
-      abstract: (p.descriptionModule?.briefSummary ?? "").slice(0, 300),
-      summary: (p.descriptionModule?.briefSummary ?? "").slice(0, 300),
+      abstract: briefSummary,
+      summary: briefSummary,
       publicationDate: p.statusModule?.startDateStruct?.date ?? "",
       startDate: p.statusModule?.startDateStruct?.date ?? "",
       url: `https://clinicaltrials.gov/study/${id}`,
@@ -130,4 +110,99 @@ async function searchClinicalTrials(parsedQuery, maxResults) {
 }
 
 async function synthesizeResults(question, parsedQuery, pubmedResults, trialResults) {
-  const pubmedSources = pubmedResults.slice(0, 8)
+  const pubmedSources = pubmedResults.slice(0, 8).map((r, i) => ({
+    index: i + 1,
+    type: "PubMed",
+    title: r.title,
+    authors: Array.isArray(r.authors) ? r.authors.map((a) => `${a.firstName} ${a.lastName}`.trim()).join(", ") : "",
+    journal: r.journal,
+    pubDate: r.pubDate,
+    url: r.url,
+  }));
+  const trialSources = trialResults.slice(0, 5).map((r, i) => ({
+    index: pubmedSources.length + i + 1,
+    type: "ClinicalTrial",
+    title: r.title,
+    status: r.status,
+    conditions: Array.isArray(r.conditions) ? r.conditions.join(", ") : "",
+    interventions: Array.isArray(r.interventions) ? r.interventions.join(", ") : "",
+    summary: r.summary,
+    url: r.url,
+  }));
+  const allSources = [...pubmedSources, ...trialSources];
+  const sourcesText = allSources.map((s) => {
+    if (s.type === "PubMed") {
+      return `[${s.index}] (PubMed) "${s.title}" — ${s.authors}. ${s.journal}, ${s.pubDate}. URL: ${s.url}`;
+    }
+    return `[${s.index}] (ClinicalTrial, ${s.status}) "${s.title}" — Conditions: ${s.conditions}. Interventions: ${s.interventions}. Summary: ${s.summary}. URL: ${s.url}`;
+  }).join("\n");
+
+  const response = await anthropic.messages.create({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 1500,
+    messages: [{
+      role: "user",
+      content: `You are a biomedical research assistant. Summarize the evidence for this question and cite every claim using source index numbers.
+
+User question: "${question}"
+
+Sources:
+${sourcesText}
+
+Return ONLY valid JSON, no markdown:
+{
+  "conclusion": "1-2 sentence direct answer",
+  "supportingSourceCount": <number>,
+  "citations": [{"index": 1, "title": "...", "contribution": "...", "url": "...", "type": "PubMed or ClinicalTrial", "authors": "..."}],
+  "disclaimer": "Please consult a healthcare professional before making any medical decisions."
+}`,
+    }],
+  });
+
+  const text = response.content.find((b) => b.type === "text")?.text ?? "{}";
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { conclusion: text, supportingSourceCount: allSources.length, citations: [], disclaimer: "Please consult a healthcare professional before making any medical decisions." };
+  }
+}
+
+export const handler = async (event) => {
+  const headers = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Content-Type": "application/json",
+  };
+  if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers, body: "" };
+
+  try {
+    const { question, maxResults = 10 } = JSON.parse(event.body ?? "{}");
+    if (!question?.trim()) return { statusCode: 400, headers, body: JSON.stringify({ error: "Question is required" }) };
+
+    const parsedQuery = await parseQueryWithAI(question);
+    const [pubmedSettled, trialsSettled] = await Promise.allSettled([
+      searchPubMed(parsedQuery, maxResults),
+      searchClinicalTrials(parsedQuery, maxResults),
+    ]);
+
+    const pubmed = Array.isArray(pubmedSettled.value) ? pubmedSettled.value : [];
+    const trials = Array.isArray(trialsSettled.value) ? trialsSettled.value : [];
+    const summary = await synthesizeResults(question, parsedQuery, pubmed, trials);
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        question,
+        intent: parsedQuery.intent,
+        concepts: parsedQuery.concepts,
+        summary,
+        results: { pubmed, clinical_trials: trials },
+        searchTerms: { pubmedQuery: parsedQuery.pubmed.query, clinicalTrialsQuery: parsedQuery.clinicalTrials },
+      }),
+    };
+  } catch (err) {
+    console.error("Search error:", err);
+    return { statusCode: 500, headers, body: JSON.stringify({ error: "Search failed", detail: err.message }) };
+  }
+};
