@@ -23,17 +23,26 @@ export default function ResultCard({ article, source }) {
 
   const identifier = isPubMed ? `PMID: ${article.id}` : `NCT: ${article.id}`
 
+  const viewLink = article.url
+    ? React.createElement(
+        'a',
+        {
+          href: article.url,
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          className: 'text-primary-600 text-sm flex items-center gap-1 hover:underline',
+        },
+        'View ',
+        React.createElement(ExternalLink, { className: 'w-4 h-4' })
+      )
+    : null
+
   return (
     <div className="card hover:shadow-md">
       <div className="p-5">
-
         <div className="flex justify-between items-start gap-3 mb-3">
-          <h3 className="text-lg font-semibold text-neutral-900 leading-snug">
-            {article.title}
-          </h3>
-          <span className={`badge shrink-0 ${badgeColor}`}>
-            {isPubMed ? 'PubMed' : 'Trial'}
-          </span>
+          <h3 className="text-lg font-semibold text-neutral-900 leading-snug">{article.title}</h3>
+          <span className={`badge shrink-0 ${badgeColor}`}>{isPubMed ? 'PubMed' : 'Trial'}</span>
         </div>
 
         {bodyText && (
@@ -41,46 +50,38 @@ export default function ResultCard({ article, source }) {
         )}
 
         <div className="space-y-1 mb-4 text-sm text-neutral-600">
-
           {isPubMed && authorText && (
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 shrink-0" />
               <span>{authorText}</span>
             </div>
           )}
-
           {isPubMed && article.journal && (
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 shrink-0" />
               <span className="italic">{article.journal}</span>
             </div>
           )}
-
           {displayDate && (
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 shrink-0" />
               <span>{displayDate}</span>
             </div>
           )}
-
           {isTrial && article.status && (
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 shrink-0" />
-              <span className={`font-medium ${
-                article.status === 'RECRUITING' ? 'text-green-700' : 'text-neutral-600'
-              }`}>
+              <span className={`font-medium ${article.status === 'RECRUITING' ? 'text-green-700' : 'text-neutral-600'}`}>
                 {article.status}
               </span>
             </div>
           )}
-
           {isTrial && conditions.length > 0 && (
             <div className="flex items-start gap-2">
               <Pill className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{conditions.join(', ')}</span>
             </div>
           )}
-
           {isTrial && interventions.length > 0 && (
             <div className="flex items-start gap-2">
               <Pill className="w-4 h-4 shrink-0 mt-0.5" />
@@ -108,17 +109,7 @@ export default function ResultCard({ article, source }) {
 
       <div className="border-t border-neutral-200 px-5 py-3 bg-neutral-50 flex justify-between items-center">
         <span className="text-xs text-neutral-500">{identifier}</span>
-         {article.url && (
-          
-            <a
-              href={article.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary-600 text-sm flex items-center gap-1 hover:underline"
-          >
-            View <ExternalLink className="w-4 h-4" />
-          </a>
-        )}
+        {viewLink}
       </div>
     </div>
   )
